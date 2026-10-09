@@ -104,7 +104,16 @@ local function frameCamera(from : Vec3f, to : Vec3f)
 	local gap = rank.planarDistance(from.x, from.y, to.x, to.y)
 	local distance = math.max(CAMERA_MIN_DISTANCE, gap * CAMERA_DISTANCE_FACTOR)
 	local midpoint = api.type.Vec3f.new(0.5 * (from.x + to.x), 0.5 * (from.y + to.y), 0.5 * (from.z + to.z))
+	-- PROBE (remove before release)
+	local function cam(label : string)
+		local c = api.gui.camera.getCameraData()
+		debugPrint(LOG_PREFIX .. string.format("probe camera %s: center %.0f,%.0f distance %.1f angle %.3f pitch %.3f",
+			label, c.x, c.y, c.z, c.w, c.q))
+	end
+	debugPrint(LOG_PREFIX .. string.format("probe camera request: midpoint %.0f,%.0f gap %.0f distance %.0f", midpoint.x, midpoint.y, gap, distance))
+	cam("before")
 	api.gui.camera.focusPosition(midpoint, distance)
+	cam("after") -- PROBE (remove before release)
 end
 
 -- Binds a map action that draws one arrow and makes it the renderer's active owner override.
