@@ -69,7 +69,8 @@ only Supplies.
   - Outbound with no towns: "No commuters leave this town."
   - Inbound with no towns: "No commuters arrive from other towns."
   - The Nearby section is left out when every other town exchanges commuters with this one.
-  - A map with one town: the card shows only "No other towns on this map".
+  - A map with one town: no card at all (the plugin condition hides it). If no other town has a position, the card
+    shows only "No other towns on this map".
 
 ## Arrows
 
@@ -175,7 +176,7 @@ record Sections
 end
 buildSections : function(towns : {TownData}, cap : integer, nearbyCount : integer) : Sections
 formatDistance : function(metres : number) : string
-formatPercent : function(fraction : number) : string     -- "45%", or "–" for nil
+formatPercent : function(fraction : number) : string     -- "45%", or "-" for nil (as the base table)
 ```
 
 The rules:
@@ -231,7 +232,7 @@ checks the following, all in one in-game session:
   - Nearby takes exactly the 3 nearest towns from "neither";
   - the cap of 10, with totals counted before the cap;
   - sorting by distance with name ties;
-  - line usage maths, nil when `usageCount` is 0, and `formatPercent`'s "–";
+  - line usage maths, nil when `usageCount` is 0, and `formatPercent`'s "-";
   - `formatDistance` boundaries.
 - `just verify` before every in-game test request.
 - **In-game checklist** (after the spike):
