@@ -15,7 +15,8 @@ local transparency = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/main
 local LOG_PREFIX = "[commuter_compass] "
 local NEARBY_COUNT = 3
 local FLOW_ACTION_KEY = "commuter_compass_flow"
-local CAMERA_DISTANCE_FACTOR = 1.2
+-- 1.2 (Cargo Compass's value) put eastern destinations under the town window, which covers the right of the screen.
+local CAMERA_DISTANCE_FACTOR = 1.6
 local CAMERA_MIN_DISTANCE = 500
 
 -- The base town window's Destinations table icons (gui/entity_window/town/town.tl).
