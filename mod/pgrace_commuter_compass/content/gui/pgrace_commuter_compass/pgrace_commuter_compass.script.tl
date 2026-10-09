@@ -65,19 +65,7 @@ end
 
 local function computeState(townEntity : Engine.Entity) : ListState
 	local ok, resultOrError = pcall(function() : Sections
-		local started = os.clock() -- PROBE (remove before release)
 		local towns = commuters.gather(townEntity)
-		-- PROBE (remove before release)
-		debugPrint(LOG_PREFIX .. string.format("probe gather: %s, %d other towns, %.1f ms", api.engine.util.getEntityName(townEntity), #towns, (os.clock() - started) * 1000))
-		for _, other in ipairs(towns) do
-			if other.outbound ~= nil and other.inbound ~= nil then
-				local o = other.outbound
-				local i = other.inbound
-				debugPrint(LOG_PREFIX .. string.format("probe %s: out work %d shop %d usage %d lines %d | in work %d shop %d usage %d lines %d",
-					other.name, o.work, o.shop, o.usageCount, o.linesUseCount, i.work, i.shop, i.usageCount, i.linesUseCount))
-			end
-		end
-		-- END PROBE
 		-- No row cap: the tables scroll and sort, and sorting a cut-off list would mislead.
 		return rank.buildSections(towns, #towns, NEARBY_COUNT)
 	end)
@@ -160,21 +148,14 @@ local FlowAction = react.RegisterRecipe("PgraceCommuterCompassFlowAction", funct
 	end
 
 	local function activate()
-		local ok = setOverride(selfRef) -- PROBE (remove before release): keep the call, drop the logging
-		debugPrint(LOG_PREFIX .. "probe flow activate " .. key .. ": override set " .. tostring(ok)) -- PROBE (remove before release)
+		setOverride(selfRef)
 	end
 
-	-- PROBE (remove before release)
-	debugPrint(LOG_PREFIX .. "probe flow render " .. key .. ": changed " .. tostring(changed) .. ", action " .. tostring(cacheRef:get().action ~= nil) .. ", selfRef " .. tostring(selfRef:get() ~= nil))
-	react.onMount(function()
-		debugPrint(LOG_PREFIX .. "probe flow mount " .. key) -- PROBE (remove before release)
-		activate()
-	end)
+	react.onMount(activate)
 	if changed and cacheRef:get().action ~= nil and selfRef:get() ~= nil then
 		activate()
 	end
 	react.onUnmount(function()
-		debugPrint(LOG_PREFIX .. "probe flow unmount " .. key) -- PROBE (remove before release)
 		setOverride(false)
 	end)
 
@@ -222,9 +203,6 @@ local NameCell = react.RegisterRecipe("PgraceCommuterCompassNameCell", function(
 	local selectedState = engine_react_util.useStepState(function() : boolean
 		return isSelected(data, flow)
 	end)
-	react.onMount(function()
-		debugPrint(LOG_PREFIX .. "probe cell mount " .. data.direction .. " " .. row.name) -- PROBE (remove before release)
-	end)
 	return builtin.BoxLayout{
 		orientation = builtin.type.Orientation.Horizontal,
 		children = {
@@ -237,8 +215,6 @@ local NameCell = react.RegisterRecipe("PgraceCommuterCompassNameCell", function(
 				},
 				value = selectedState:old() and 1 or 0,
 				onValueChange = function(value : integer)
-					-- PROBE (remove before release)
-					debugPrint(LOG_PREFIX .. "probe toggle " .. data.direction .. " " .. row.name .. ": value " .. tostring(value) .. ", selected before " .. tostring(isSelected(data, flow)) .. ", polled " .. tostring(selectedState:old()))
 					if value == 1 then
 						data.selectionState:set(flow)
 					elseif isSelected(data, flow) then

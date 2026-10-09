@@ -231,6 +231,27 @@ checks the following, all in one in-game session:
 5. **Counts:** the outbound work and shop counts and the line usage % match the base Destinations table on the
    Supplies tab for the same town.
 
+## Findings (spike, 2026-10-09)
+
+Measured on the user's largest save (54 towns, about 12,750 people), with probes since removed.
+
+- **Timing:** `gather` for a town takes 9–11 ms on a healthy system, and 39–172 ms for Ferry Pass (it varies with the
+  simulation load). The 58–60 ms first readings came from a session where the whole PC was about 3× slow. It's a
+  single pause when a window opens, so **no cache**. If one is ever needed, module state in `commuters.tl` does persist
+  between window opens (the probe call counter kept rising), so a module-level town-by-town matrix would work.
+- **Counts:** `usage.count` always equals work + shop, so the engine counts destinations (trips). A resident who both
+  works and shops in a town counts twice. Headers say "trips".
+- **Inbound:** B's Inbound entry for A matches A's Outbound entry for B, and both match the base Destinations table.
+- **Layout:** free-flowing rows looked cramped, so each section became a `builtin.DataTable` (see Card layout).
+- **Crash:** a table cell recipe that returned a bare `TextView` took down the whole UI ("Recipe child must be a
+  layout"). Every recipe now returns a `BoxLayout`. Recorded in `../AGENTS.md`.
+- **Switching arrows:** with one `useAction` key for every arrow, switching from one arrow to another left the old
+  arrow on screen, while the camera still framed the new one. A fresh mount always worked. Fix: the action key
+  includes the selection (`commuter_compass_flow:<from>><to>±`). Cargo Compass uses a single key the same way and may
+  have the same latent bug.
+- **Overlay hand-back:** toggling off, closing the window, folding sections, and opening another town (whose window
+  takes the map) all behave correctly.
+
 ## Testing
 
 - `just check`: type-check against the game's tealdefs.
