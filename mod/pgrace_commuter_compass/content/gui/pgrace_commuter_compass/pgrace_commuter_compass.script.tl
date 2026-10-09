@@ -240,9 +240,14 @@ end)
 local function makeTextCell(name : string, textOf : function(Row) : string) : Recipe<Builtin.TableCellParam>
 	return react.RegisterRecipe(name, function(params : Builtin.TableCellParam) : TreeNodeId
 		local data = params.userParam as TableData
-		return builtin.TextView{
-			meta = { class = "font-scale-body" },
-			text = textOf(data.rows[params.rowKey]),
+		-- A recipe must return a layout; a bare TextView crashes the whole UI ("Recipe child must be a layout").
+		return builtin.BoxLayout{
+			children = {
+				builtin.TextView{
+					meta = { class = "font-scale-body" },
+					text = textOf(data.rows[params.rowKey]),
+				},
+			},
 		}
 	end)
 end
