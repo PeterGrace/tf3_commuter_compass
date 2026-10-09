@@ -1,1 +1,1 @@
-require "gui.pgrace_commuter_compass.util"
+require "gui.pgrace_commuter_compass.rank"

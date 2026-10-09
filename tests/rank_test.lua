@@ -1,0 +1,35 @@
+local t = ...
+local rank = t.requireTl("gui/pgrace_commuter_compass/rank.tl")
+
+t.test("planarDistance: straight line on the map plane", function()
+	t.eq(rank.planarDistance(0, 0, 3, 4), 5)
+	t.eq(rank.planarDistance(100, 100, 103, 104), 5)
+	t.eq(rank.planarDistance(7, 7, 7, 7), 0)
+end)
+
+t.test("formatDistance: metres below 1 km", function()
+	t.eq(rank.formatDistance(0), "0 m")
+	t.eq(rank.formatDistance(850.4), "850 m")
+	t.eq(rank.formatDistance(999.4), "999 m")
+end)
+
+t.test("formatDistance: kilometres with one decimal", function()
+	t.eq(rank.formatDistance(999.6), "1.0 km")
+	t.eq(rank.formatDistance(4210), "4.2 km")
+	t.eq(rank.formatDistance(11349), "11.3 km")
+end)
+
+t.test("formatPercent: rounds to whole percent, '-' for nil", function()
+	t.eq(rank.formatPercent(nil), "-")
+	t.eq(rank.formatPercent(0), "0%")
+	t.eq(rank.formatPercent(0.454), "45%")
+	t.eq(rank.formatPercent(0.456), "46%")
+	t.eq(rank.formatPercent(1), "100%")
+end)
+
+t.test("lineUsage: linesUseCount / usageCount, nil when nothing is counted", function()
+	t.eq(rank.lineUsage(nil), nil)
+	t.eq(rank.lineUsage({ work = 0, shop = 0, usageCount = 0, linesUseCount = 0 }), nil)
+	t.eq(rank.lineUsage({ work = 8, shop = 4, usageCount = 12, linesUseCount = 3 }), 0.25)
+	t.eq(rank.lineUsage({ work = 1, shop = 0, usageCount = 1, linesUseCount = 0 }), 0)
+end)
