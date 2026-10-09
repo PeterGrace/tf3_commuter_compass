@@ -15,9 +15,14 @@ local transparency = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/main
 local LOG_PREFIX = "[commuter_compass] "
 local NEARBY_COUNT = 3
 local FLOW_ACTION_KEY = "commuter_compass_flow"
--- 1.2 (Cargo Compass's value) put eastern destinations under the town window, which covers the right of the screen.
+-- Camera distance as a multiple of the gap between the towns (Cargo Compass uses 1.2), for a margin around both.
 local CAMERA_DISTANCE_FACTOR = 1.6
 local CAMERA_MIN_DISTANCE = 500
+-- focusPosition caps the distance at the game's maximum zoom-out (about 4,055 m in testing).
+local CAMERA_MAX_DISTANCE = 4000
+-- How far to move the view toward screen-right, as a fraction of the camera distance, so the arrow is centred
+-- in the map area left of the entity window (about the right quarter of a 16:9 screen).
+local CAMERA_WINDOW_SHIFT = 0.27
 
 -- The base town window's Destinations table icons (gui/entity_window/town/town.tl).
 local WORK_ICON = "::/gui/entity_window/icons/building_industry.tga"
@@ -100,20 +105,39 @@ local function makeFlowLayerConfig(from : Vec3f, to : Vec3f, animated : boolean)
 	return layerConfig
 end
 
+-- Moves the camera's look-at point toward screen-right, so the midpoint lands in the middle of the map area
+-- left of the entity window. Screen-right comes from the camera's eye and centre; world2Screen confirms the sign.
+local function shiftClearOfWindow(midpoint : Vec3f, distance : number) : Vec3f
+	local camera = api.gui.camera
+	local eye = camera.getEye()
+	local center = camera.getCenter()
+	local fx, fy = center.x - eye.x, center.y - eye.y
+	local length = math.sqrt(fx * fx + fy * fy)
+	if length < 1e-3 then
+		return midpoint
+	end
+	local rx, ry = fy / length, -fx / length
+	local probe = api.type.Vec3f.new(center.x + 100 * rx, center.y + 100 * ry, center.z)
+	if camera.world2Screen(probe).x < camera.world2Screen(center).x then
+		rx, ry = -rx, -ry
+	end
+	local shift = CAMERA_WINDOW_SHIFT * math.min(distance, CAMERA_MAX_DISTANCE)
+	return api.type.Vec3f.new(midpoint.x + shift * rx, midpoint.y + shift * ry, midpoint.z)
+end
+
 local function frameCamera(from : Vec3f, to : Vec3f)
 	local gap = rank.planarDistance(from.x, from.y, to.x, to.y)
 	local distance = math.max(CAMERA_MIN_DISTANCE, gap * CAMERA_DISTANCE_FACTOR)
 	local midpoint = api.type.Vec3f.new(0.5 * (from.x + to.x), 0.5 * (from.y + to.y), 0.5 * (from.z + to.z))
-	-- PROBE (remove before release)
-	local function cam(label : string)
-		local c = api.gui.camera.getCameraData()
-		debugPrint(LOG_PREFIX .. string.format("probe camera %s: center %.0f,%.0f distance %.1f angle %.3f pitch %.3f",
-			label, c.x, c.y, c.z, c.w, c.q))
+	local ok, target = pcall(shiftClearOfWindow, midpoint, distance)
+	if not ok then
+		debugPrint(LOG_PREFIX .. "camera shift failed: " .. tostring(target))
+		target = midpoint
 	end
-	debugPrint(LOG_PREFIX .. string.format("probe camera request: midpoint %.0f,%.0f gap %.0f distance %.0f", midpoint.x, midpoint.y, gap, distance))
-	cam("before")
-	api.gui.camera.focusPosition(midpoint, distance)
-	cam("after") -- PROBE (remove before release)
+	local aim = target as Vec3f
+	debugPrint(LOG_PREFIX .. string.format("probe camera: midpoint %.0f,%.0f aim %.0f,%.0f gap %.0f distance %.0f", -- PROBE (remove before release)
+		midpoint.x, midpoint.y, aim.x, aim.y, gap, distance))
+	api.gui.camera.focusPosition(aim, distance)
 end
 
 -- Binds a map action that draws one arrow and makes it the renderer's active owner override.
