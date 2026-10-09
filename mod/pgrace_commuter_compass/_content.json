@@ -1,0 +1,9 @@
+{
+    "archives": null,
+    "files": [
+        "gui/pgrace_commuter_compass/industry_plugin.res.lua",
+        "gui/pgrace_commuter_compass/pgrace_commuter_compass.script.tl",
+        "gui/pgrace_commuter_compass/util.d.tl",
+        "gui/pgrace_commuter_compass/util.tl"
+    ]
+}
