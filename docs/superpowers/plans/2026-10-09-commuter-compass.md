@@ -1181,12 +1181,34 @@ with:
 If `os` turns out not to be available in the game's GUI Lua, the pcall fails and the card shows the error hint. The
 log then says so, and the fix is to drop the timing.
 
-- [ ] **Step 2: Verify and install**
+- [ ] **Step 2: Add the module-persistence probe**
+
+If the timing turns out too slow, the fix is a module-level town-by-town matrix cache in `commuters.tl`, refreshed
+about once per game month. That only works if `commuters.tl`'s module state survives between window opens.
+
+In `commuters.tl`, add this just above `function commuters.gather`:
+
+```teal
+local probeGatherCalls = 0 -- PROBE (remove before release)
+```
+
+Then add this as the first line inside `function commuters.gather(town : Engine.Entity) : {TownData}`:
+
+```teal
+	probeGatherCalls = probeGatherCalls + 1 -- PROBE (remove before release)
+	debugPrint("[commuter_compass] probe module state: gather call #" .. tostring(probeGatherCalls)) -- PROBE (remove before release)
+```
+
+How to read the result: if the call number keeps rising across window opens (#1, #2, #3, ...), the module state
+persists and a cache in `commuters.tl` works. If it is always #1, each window gets a fresh module, and a cache would
+need another home.
+
+- [ ] **Step 3: Verify and install**
 
 Run: `just verify && just install`
 Expected: verify passes, and `install` reports the symlink in the staging area.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add mod
@@ -1195,7 +1217,7 @@ git commit -m "debug: probe commuter gather timing and counts
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 4: Ask the user for the in-game test. STOP and wait for the reply.**
+- [ ] **Step 5: Ask the user for the in-game test. STOP and wait for the reply.**
 
 Send the user this checklist:
 
@@ -1214,9 +1236,11 @@ Send the user this checklist:
 > 6. Toggle the arrow off. Is the town's normal overlay back? Show an arrow again and close the window. Is the map
 >    normal?
 > 7. Do the work, shop and line icons look the right size? A screenshot helps.
-> 8. Open 2–3 more towns, then tell me you're done.
+> 8. Close this town's window and open the **same** town again. Then open your **second-biggest** town. (This
+>    checks whether the mod can keep a cache between windows.)
+> 9. Open 2–3 more towns, then tell me you're done.
 
-- [ ] **Step 5: Read the probe output**
+- [ ] **Step 6: Read the probe output**
 
 ```bash
 grep -h "\[commuter_compass\]" ~/.local/share/Steam/userdata/*/3493540/local/crash_dump/stdout.txt | tail -60
@@ -1226,13 +1250,25 @@ Record these in the spec under a new "Findings (spike)" section:
 
 - the gather time in ms against the town count;
 - whether `usageCount` equals work + shop, or is something else;
-- whether the counts matched the base table.
+- whether the counts matched the base table;
+- whether the `probe module state` call number kept rising across window opens. If it did, the module state
+  persists.
 
-- [ ] **Step 6: Decision gate on timing**
+- [ ] **Step 7: Decision gate on timing**
 
 - **If every `probe gather` time is ≤ 50 ms:** carry on to Task 6.
-- **If any is above 50 ms:** stop. Report the numbers to the user and propose computing Inbound only when its
-  section is first expanded, as the spec's fallback. That change gets its own short plan before Task 6.
+- **If any is above 50 ms:** stop and report the numbers to the user. The inbound pass costs about the same as
+  building the whole town-by-town matrix: 3 calls per town, each answering for every destination. So propose these
+  options, in this order:
+  1. **If the module state persists:** a module-level matrix cache in `commuters.tl`. It is rebuilt when it is older
+     than about one game month, measured with the `GAME_TIME` component's `gameTime` against
+     `api.util.getDefaultYearDuration() / 12`. The card shows "as of <date>".
+  2. **If one rebuild still hitches:** move the rebuild to a worker thread, the way the base town window does with
+     `useStepStateParallelSimple` / `react.enqueueParallel`. This needs a probe first: can a mod script be the named
+     function, and is `getSourceToDestinationCount` safe off the UI thread?
+  3. **Otherwise:** compute Inbound only when its section is first expanded, as the spec's fallback.
+
+  Whichever option the user picks gets a spec update and its own short plan before Task 6.
 
   Visual problems from steps 5–7 of the checklist (icon sizes, arrow look) are fixed here with small commits
   (`fix: ...`). Re-run `just verify` after each fix, and ask the user to re-check only the affected items.
@@ -1244,7 +1280,12 @@ Record these in the spec under a new "Findings (spike)" section:
 **Files:**
 - Modify: `mod/pgrace_commuter_compass/content/gui/pgrace_commuter_compass/pgrace_commuter_compass.script.tl`
 
-- [ ] **Step 1: Restore `computeState`'s pcall'd function to its probe-free form**
+- [ ] **Step 1: Remove the module-state probe from `commuters.tl`**
+
+Delete the `local probeGatherCalls = 0` line and the two probe lines at the top of `commuters.gather`. All three are
+marked `-- PROBE (remove before release)`.
+
+- [ ] **Step 1b: Restore `computeState`'s pcall'd function to its probe-free form**
 
 Replace everything from `local started = os.clock() -- PROBE (remove before release)` through `-- END PROBE` so the
 function reads exactly:
