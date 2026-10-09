@@ -58,6 +58,6 @@ global record PgraceCommuterCompassRank
 	buildSections : function(towns : {TownData}, cap : integer, nearbyCount : integer) : Sections
 	-- "850 m" below one kilometre, otherwise "4.2 km".
 	formatDistance : function(metres : number) : string
-	-- "45%", or "-" for nil (as the base Destinations table).
+	-- "45%"; "<1%" for small non-zero shares (so a rider is never shown as "0%"); "-" for nil (as the base table).
 	formatPercent : function(fraction : number) : string
 end

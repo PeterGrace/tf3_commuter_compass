@@ -25,6 +25,10 @@ function rank.formatPercent(fraction : number) : string
 	if fraction == nil then
 		return "-"
 	end
+	-- Rounding would show "0%" while the arrow is animated; any rider at all reads "<1%".
+	if fraction > 0 and fraction < 0.005 then
+		return "<1%"
+	end
 	return string.format("%d%%", math.floor(fraction * 100 + 0.5))
 end
 

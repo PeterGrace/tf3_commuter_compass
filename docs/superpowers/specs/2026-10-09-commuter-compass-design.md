@@ -196,7 +196,7 @@ The rules:
   error.
 - The card wraps `content_card.ContentCard` (title, `recipeAndParamPermanent`, `gameCtx`, `showOnRightSide`).
 - The data is computed once with `react.useStateLazy(function() return pcall(...) end)`.
-- The list recipe holds the expanded-sections table and the selected arrow `{section, entity}`. When an arrow is
+- The list recipe holds the expanded-sections table and the selected arrow `{from, to, animated}`. When an arrow is
   selected, it renders the `FlowAction` child.
 
 ## Error handling

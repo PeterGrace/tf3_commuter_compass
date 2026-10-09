@@ -79,6 +79,7 @@ function commuters.gather(town : Engine.Entity) : {TownData}
 	local result : {TownData} = {}
 	local sx, sy = getPosition(town)
 	if sx == nil then
+		debugPrint("[commuter_compass] town " .. tostring(town) .. " has no bounding volume")
 		return result
 	end
 

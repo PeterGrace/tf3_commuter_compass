@@ -1236,6 +1236,10 @@ Send the user this checklist:
 > 6. Toggle the arrow off. Is the town's normal overlay back? Show an arrow again and close the window. Is the map
 >    normal?
 > 7. Do the work, shop and line icons look the right size? A screenshot helps.
+> 7a. With an arrow showing, expand or collapse **another** section. The camera shouldn't jump, and the arrow should
+>     stay.
+> 7b. With an arrow showing, click a row's **town name**. Does the new window show its normal overlay? Close it. Is
+>     the first window's arrow still there?
 > 8. Close this town's window and open the **same** town again. Then open your **second-biggest** town. (This
 >    checks whether the mod can keep a cache between windows.)
 > 9. Open 2–3 more towns, then tell me you're done.
@@ -1253,6 +1257,13 @@ Record these in the spec under a new "Findings (spike)" section:
 - whether the counts matched the base table;
 - whether the `probe module state` call number kept rising across window opens. If it did, the module state
   persists.
+
+Also decide, using the `usage` vs work + shop probe numbers, whether the section header should say "commuters".
+Work + shop counts a resident who both works and shops in a town twice; if the gap is large, use "trips" or the
+usage count instead.
+
+If checklist item 7a misbehaves, give `FlowAction` a stable `meta = { localKey = "flow" }`. If 7b misbehaves,
+note it under Known limitations; Cargo Compass shares the same single global override.
 
 - [ ] **Step 7: Decision gate on timing**
 

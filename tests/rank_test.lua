@@ -27,6 +27,12 @@ t.test("formatPercent: rounds to whole percent, '-' for nil", function()
 	t.eq(rank.formatPercent(1), "100%")
 end)
 
+t.test("formatPercent: small non-zero shares read '<1%', never '0%'", function()
+	t.eq(rank.formatPercent(0.0033), "<1%")
+	t.eq(rank.formatPercent(0.0049), "<1%")
+	t.eq(rank.formatPercent(0.005), "1%")
+end)
+
 t.test("lineUsage: linesUseCount / usageCount, nil when nothing is counted", function()
 	t.eq(rank.lineUsage(nil), nil)
 	t.eq(rank.lineUsage({ work = 0, shop = 0, usageCount = 0, linesUseCount = 0 }), nil)

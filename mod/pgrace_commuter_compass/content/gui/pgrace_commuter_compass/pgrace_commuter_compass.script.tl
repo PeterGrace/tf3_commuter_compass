@@ -331,8 +331,10 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 				add(makeHint(_("Commuter data unavailable")))
 			end
 			if #sections.nearby.rows > 0 then
+				-- Without commuter data every town lands here, so don't claim they have no commuters.
+				local nearbyLabel = sections.countsKnown and _("Nearby, no commuters") or _("Nearest towns")
 				add(makeSection({
-					title = _("Nearby, no commuters") .. " · " .. plural(#sections.nearby.rows, _("town"), _("towns")),
+					title = nearbyLabel .. " · " .. plural(#sections.nearby.rows, _("town"), _("towns")),
 					section = sections.nearby,
 					emptyText = "",
 					showCounts = false,
