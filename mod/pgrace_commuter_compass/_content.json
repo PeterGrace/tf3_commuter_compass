@@ -3,9 +3,9 @@
     "files": [
         "gui/pgrace_commuter_compass/commuters.d.tl",
         "gui/pgrace_commuter_compass/commuters.tl",
-        "gui/pgrace_commuter_compass/industry_plugin.res.lua",
         "gui/pgrace_commuter_compass/pgrace_commuter_compass.script.tl",
         "gui/pgrace_commuter_compass/rank.d.tl",
-        "gui/pgrace_commuter_compass/rank.tl"
+        "gui/pgrace_commuter_compass/rank.tl",
+        "gui/pgrace_commuter_compass/town_plugin.res.lua"
     ]
 }
