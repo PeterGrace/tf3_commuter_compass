@@ -102,8 +102,9 @@ only Supplies.
     `hasExpired()` / `getIdentity()`.
   - On unmount, `setActiveOwnerOverride(false)` hands the map back to the town window's own overlay.
   - Never call `setActiveOwner`, and never push a tool onto the ToolStack.
-- **Camera:** `api.gui.camera.focusPosition(midpoint, max(MIN_DISTANCE, gap * FACTOR))`, with Cargo Compass's
-  tuned constants.
+- **Camera:** `api.gui.camera.focusPosition(midpoint, max(MIN_DISTANCE, gap * FACTOR))`, with MIN_DISTANCE 500 and
+  FACTOR 1.6. Cargo Compass uses 1.2, but in screenshots that put eastern destinations under the town window, which
+  covers the right quarter of the screen while the camera centres on the whole screen.
 
 ## Architecture
 
