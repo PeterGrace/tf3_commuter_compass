@@ -64,10 +64,10 @@ end
 
 -- `towns` is already sorted. Totals cover every town; rows stop at `limit`.
 local function makeSection(towns : {TownData}, countsOf : function(TownData) : Counts, limit : integer) : Section
-	local section : Section = { rows = {}, townCount = #towns, commuterCount = 0 }
+	local section : Section = { rows = {}, townCount = #towns, tripCount = 0 }
 	for i, town in ipairs(towns) do
 		local counts = countsOf(town)
-		section.commuterCount = section.commuterCount + commutersOf(counts)
+		section.tripCount = section.tripCount + commutersOf(counts)
 		if i <= limit then
 			section.rows[i] = toRow(town, counts)
 		end

@@ -41,10 +41,11 @@ only Supplies.
 
 ```
 ┌ Commuters ───────────────────────────────────────┐
-│ ▸ Outbound · 3 towns · 21 commuters              │
-│ ▾ Inbound · 2 towns · 13 commuters               │
-│    [⌖][➚] Riverton    4.2 km  🏢 4 🛒 7  🚆 45%  │
-│    [⌖][➚] Oakford     7.9 km  🏢 0 🛒 2  🚆  0%  │
+│ ▸ Outbound · 3 towns · 21 trips                  │
+│ ▾ Inbound · 2 towns · 13 trips                   │
+│    Town                 Distance   🏢   🛒   🚆   │
+│    [⌖][➚] Riverton      4.2 km     4    7   45%  │
+│    [⌖][➚] Oakford       7.9 km     0    2    0%  │
 │ ▸ Nearby, no commuters · 3 towns                 │
 └──────────────────────────────────────────────────┘
 ```
@@ -52,17 +53,23 @@ only Supplies.
 - **Sections:** each section header is a collapsible button with the combobox arrows
   (`::/gui/builtin/combobox/arrow_right.tga` / `arrow_down.tga`), as in Cargo Compass.
   - **Outbound:** towns where this town's residents work or shop. The header shows
-    "Outbound · N towns · M commuters".
+    "Outbound · N towns · M trips".
   - **Inbound:** towns whose residents work or shop here. The header follows the same format.
   - **Nearby, no commuters:** the header shows "· N towns".
   - Every section starts collapsed. Expanded state lasts only while the window is open.
-- **Rows:**
-  - Rows in each section are sorted by distance and capped at **10**.
-  - Each row has `line_react_util.LocateButton`, an arrow toggle, the town name
-    (`makeEntityWindowButton`, which opens that town's window), and the distance.
-  - Outbound/Inbound rows also show the work count, the shop count and the line usage %. The icons are picked during
-    implementation from the base game's icons, and each value gets a tooltip ("Work", "Shop", "Line usage").
-  - Nearby rows show only the distance.
+- **Trips, not commuters** (changed after the spike): the engine's usage count always equals work + shop, so it
+  counts destinations, and a resident who both works and shops in a town counts twice. Headers say "trips".
+- **Rows** (changed after the spike, which showed free-flowing rows looked cramped): each section is a
+  `builtin.DataTable`, the widget behind the base Destinations table.
+  - **Columns:**
+    - Town: `LocateButton`, the arrow toggle, and the name (`makeEntityWindowButton`).
+    - Distance.
+    - Work, Shop and Line usage, with the base table's header icons and tooltips. Nearby has no count columns.
+  - Every column sorts when its header is clicked. Tables start sorted by distance, nearest first.
+  - No row cap, because a sorted cut-off list would mislead. The tables scroll.
+  - Cells receive the section's data as `userParam`, which only reaches newly created cells. The arrow toggle
+    therefore polls the shared selection with `engine_react_util.useStepState`.
+  - Columns are left-aligned. The base `right-aligned` style class only applies inside the Statistics window.
 - **Distance format:** the same as Cargo Compass: under 1000 m as `"850 m"`, otherwise as km with one decimal
   (`"4.2 km"`).
 - **Empty states:**
@@ -167,7 +174,7 @@ end
 record Section
 	rows : {Row}               -- sorted, capped
 	townCount : integer        -- before the cap
-	commuterCount : integer    -- sum of work + shop, before the cap
+	tripCount : integer        -- sum of work + shop (trips), before the cap
 end
 record Sections
 	outbound : Section
@@ -184,7 +191,7 @@ The rules:
 - A town goes in Outbound when `outbound.work + outbound.shop > 0`, and in Inbound by the same rule on `inbound`.
 - A town goes in Nearby when it is in neither. Nearby takes the `nearbyCount` (3) nearest.
 - Each list is sorted by distance, with ties broken by name, then capped at `cap` (10).
-- `townCount` and `commuterCount` are counted before the cap, so the header totals stay true even when the list
+- `townCount` and `tripCount` are counted before the cap, so the header totals stay true even when the list
   is cut.
 - `lineUsage = linesUseCount / usageCount` when `usageCount > 0`, otherwise nil.
 - The arrow is animated when `lineUsage` is above 0.

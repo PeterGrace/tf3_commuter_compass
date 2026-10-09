@@ -36,8 +36,9 @@ global record PgraceCommuterCompassRank
 		rows : {Row}
 		-- Towns in the section before the cap.
 		townCount : integer
-		-- Sum of work + shop over all towns in the section, before the cap.
-		commuterCount : integer
+		-- Sum of work + shop over all towns in the section, before the cap. These are trips (destinations), not people:
+		-- a resident who both works and shops in a town counts twice, as in the engine's own "usage" count.
+		tripCount : integer
 	end
 
 	record Sections

@@ -4,6 +4,7 @@ local content_card = ug_require "::/gui/main/content_card.tl" as ContentCard
 local line_react_util = ug_require "::/gui/line_vehicle_mgmt/line_react_util.tl" as LineReactUtil
 local selector_react_util = ug_require "::/gui/main/selector_react_util.tl" as SelectorReactUtil
 local color_util = ug_require "::/gui/main/color_util.tl" as ColorUtil
+local engine_react_util = ug_require "::/gui/main/engine_react_util.tl" as EngineReactUtil
 local town_eow = ug_require "::/gui/entity_window/town/town_eow.script.tl" as TownEow
 local commuters = ug_require "pgrace_commuter_compass::/gui/pgrace_commuter_compass/commuters.tl" as PgraceCommuterCompassCommuters
 local rank = ug_require "pgrace_commuter_compass::/gui/pgrace_commuter_compass/rank.tl" as PgraceCommuterCompassRank
@@ -12,7 +13,6 @@ local layerColors = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/layer
 local transparency = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/main/transparency.gres")).data as GResTransparency
 
 local LOG_PREFIX = "[commuter_compass] "
-local ROW_CAP = 10
 local NEARBY_COUNT = 3
 local FLOW_ACTION_KEY = "commuter_compass_flow"
 local CAMERA_DISTANCE_FACTOR = 1.2
@@ -78,7 +78,8 @@ local function computeState(townEntity : Engine.Entity) : ListState
 			end
 		end
 		-- END PROBE
-		return rank.buildSections(towns, ROW_CAP, NEARBY_COUNT)
+		-- No row cap: the tables scroll and sort, and sorting a cut-off list would mislead.
+		return rank.buildSections(towns, #towns, NEARBY_COUNT)
 	end)
 	if ok then
 		return { sections = resultOrError as Sections, failed = false }
@@ -171,49 +172,155 @@ local FlowAction = react.RegisterRecipe("PgraceCommuterCompassFlowAction", funct
 	return builtin.BoxLayout{ children = {} }
 end)
 
-local function makeStat(icon : string, text : string, tooltip : string) : TreeNodeId
-	return builtin.BoxLayout{
-		meta = { tooltip = tooltip },
-		orientation = builtin.type.Orientation.Horizontal,
-		children = {
-			builtin.ImageView{ path = icon },
-			builtin.TextView{ text = text },
-		},
-	}
+local function usesLines(row : Row) : boolean
+	return (row.lineUsage or 0) > 0
 end
 
--- One row: locate, arrow toggle, name (opens the town's window), distance, then the counts when `showCounts`.
-local function makeRow(row : Row, flow : Selection, showCounts : boolean, selectionState : ReactStateT<Selection>) : TreeNodeId
-	local current = selectionState:old()
-	local isSelected = current ~= nil and current.from == flow.from and current.to == flow.to
-	local children : {TreeNodeId} = {
-		line_react_util.LocateButton{ entity = row.entity },
-		builtin.ToggleButton{
-			meta = { tooltip = _("Show on the map") },
-			content = builtin.ImageView{
-				path = ARROW_ICON,
-				scaling = builtin.type.ImageViewScaling.AutoFit,
-			},
-			value = isSelected and 1 or 0,
-			onValueChange = function(value : integer)
-				if value == 1 then
-					selectionState:set(flow)
-				else
-					selectionState:set(nil)
-				end
-			end,
-		},
-		line_react_util.makeEntityWindowButton(row.name, row.entity),
-		builtin.TextView{ text = rank.formatDistance(row.distance) },
-	}
-	if showCounts then
-		children[#children + 1] = makeStat(WORK_ICON, tostring(row.work), _("Work"))
-		children[#children + 1] = makeStat(SHOP_ICON, tostring(row.shop), _("Shop"))
-		children[#children + 1] = makeStat(LINE_ICON, rank.formatPercent(row.lineUsage), _("Line usage"))
+local enum Direction
+	"Out"
+	"In"
+	"Nearby"
+end
+
+-- Shared with every cell of one section's table (DataTable hands it to newly created cells as `userParam`).
+-- The data is fixed while the window is open; only the selection changes, and cells poll it.
+local record TableData
+	here : Engine.Entity
+	direction : Direction
+	rows : {Engine.Entity : Row}
+	selectionState : ReactStateT<Selection>
+end
+
+-- The arrow a row's toggle selects: passengers travel towards whoever they commute to.
+local function flowFor(data : TableData, row : Row) : Selection
+	if data.direction == "In" then
+		return { from = row.entity, to = data.here, animated = usesLines(row) }
 	end
+	return { from = data.here, to = row.entity, animated = data.direction == "Out" and usesLines(row) }
+end
+
+local function isSelected(data : TableData, flow : Selection) : boolean
+	local current = data.selectionState:old()
+	return current ~= nil and current.from == flow.from and current.to == flow.to
+end
+
+-- Locate, arrow toggle, and the name (opens the town's window), as the base Destinations table's name cell.
+local NameCell = react.RegisterRecipe("PgraceCommuterCompassNameCell", function(params : Builtin.TableCellParam) : TreeNodeId
+	local data = params.userParam as TableData
+	local row = data.rows[params.rowKey]
+	local flow = flowFor(data, row)
+	-- Cells keep their first userParam, so the toggle polls the shared selection to follow other rows' clicks.
+	local selectedState = engine_react_util.useStepState(function() : boolean
+		return isSelected(data, flow)
+	end)
 	return builtin.BoxLayout{
 		orientation = builtin.type.Orientation.Horizontal,
-		children = children,
+		children = {
+			line_react_util.LocateButton{ entity = row.entity },
+			builtin.ToggleButton{
+				meta = { tooltip = _("Show on the map") },
+				content = builtin.ImageView{
+					path = ARROW_ICON,
+					scaling = builtin.type.ImageViewScaling.AutoFit,
+				},
+				value = selectedState:old() and 1 or 0,
+				onValueChange = function(value : integer)
+					if value == 1 then
+						data.selectionState:set(flow)
+					elseif isSelected(data, flow) then
+						data.selectionState:set(nil)
+					end
+				end,
+			},
+			line_react_util.makeEntityWindowButton(row.name, row.entity),
+		},
+	}
+end)
+
+local function makeTextCell(name : string, textOf : function(Row) : string) : Recipe<Builtin.TableCellParam>
+	return react.RegisterRecipe(name, function(params : Builtin.TableCellParam) : TreeNodeId
+		local data = params.userParam as TableData
+		return builtin.TextView{
+			meta = { class = "font-scale-body" },
+			text = textOf(data.rows[params.rowKey]),
+		}
+	end)
+end
+
+local DistanceCell = makeTextCell("PgraceCommuterCompassDistanceCell", function(row : Row) : string
+	return rank.formatDistance(row.distance)
+end)
+local WorkCell = makeTextCell("PgraceCommuterCompassWorkCell", function(row : Row) : string
+	return tostring(row.work)
+end)
+local ShopCell = makeTextCell("PgraceCommuterCompassShopCell", function(row : Row) : string
+	return tostring(row.shop)
+end)
+local LineUsageCell = makeTextCell("PgraceCommuterCompassLineUsageCell", function(row : Row) : string
+	return rank.formatPercent(row.lineUsage)
+end)
+
+-- The base game's table: icons once in the header, aligned columns, sortable by clicking a header.
+-- Starts sorted by distance (column 2), nearest first.
+local function makeTable(section : Section, data : TableData, showCounts : boolean) : TreeNodeId
+	local rowKeys : {integer} = {}
+	for i, row in ipairs(section.rows) do
+		rowKeys[i] = row.entity
+		data.rows[row.entity] = row
+	end
+	local function rowOf(rowKey : integer) : Row
+		return data.rows[rowKey]
+	end
+
+	local columns : {TreeNodeId} = {
+		builtin.ColumnDesc{
+			name = _("Town"),
+			recipe = NameCell,
+			getCompareValue = function(rowKey : integer) : any
+				return rowOf(rowKey).name
+			end,
+			weight = 1,
+		},
+		builtin.ColumnDesc{
+			name = _("Distance"),
+			recipe = DistanceCell,
+			getCompareValue = function(rowKey : integer) : any
+				return rowOf(rowKey).distance
+			end,
+		},
+	}
+	if showCounts then
+		columns[#columns + 1] = builtin.ColumnDesc{
+			tooltip = _("Work"),
+			path = WORK_ICON,
+			recipe = WorkCell,
+			getCompareValue = function(rowKey : integer) : any
+				return rowOf(rowKey).work
+			end,
+		}
+		columns[#columns + 1] = builtin.ColumnDesc{
+			tooltip = _("Shop"),
+			path = SHOP_ICON,
+			recipe = ShopCell,
+			getCompareValue = function(rowKey : integer) : any
+				return rowOf(rowKey).shop
+			end,
+		}
+		columns[#columns + 1] = builtin.ColumnDesc{
+			tooltip = _("Line usage"),
+			path = LINE_ICON,
+			recipe = LineUsageCell,
+			getCompareValue = function(rowKey : integer) : any
+				return rowOf(rowKey).lineUsage or 0
+			end,
+		}
+	end
+
+	return builtin.DataTable{
+		columns = columns,
+		rowKeys = rowKeys,
+		userParam = data,
+		initialSortColumn = { 2, true },
 	}
 end
 
@@ -228,8 +335,7 @@ local record SectionSpec
 	section : Section
 	emptyText : string
 	showCounts : boolean
-	-- The arrow a row's toggle selects.
-	flowOf : function(Row) : Selection
+	data : TableData
 end
 
 local function plural(count : integer, one : string, many : string) : string
@@ -252,30 +358,24 @@ local function makeSectionHeader(title : string, fold : Fold) : TreeNodeId
 	}
 end
 
-local function makeSection(spec : SectionSpec, fold : Fold, selectionState : ReactStateT<Selection>) : TreeNodeId
+local function makeSection(spec : SectionSpec, fold : Fold) : TreeNodeId
 	local header = makeSectionHeader(spec.title, fold)
 	if not fold.expanded then
 		return header
 	end
-	local children : {TreeNodeId} = { header }
+	local body : TreeNodeId
 	if #spec.section.rows == 0 then
-		children[#children + 1] = makeHint(spec.emptyText)
+		body = makeHint(spec.emptyText)
 	else
-		for _, row in ipairs(spec.section.rows) do
-			children[#children + 1] = makeRow(row, spec.flowOf(row), spec.showCounts, selectionState)
-		end
+		body = makeTable(spec.section, spec.data, spec.showCounts)
 	end
-	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = children }
+	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = { header, body } }
 end
 
-local function commuterTitle(label : string, section : Section) : string
+local function tripTitle(label : string, section : Section) : string
 	return label
 		.. " · " .. plural(section.townCount, _("town"), _("towns"))
-		.. " · " .. plural(section.commuterCount, _("commuter"), _("commuters"))
-end
-
-local function usesLines(row : Row) : boolean
-	return (row.lineUsage or 0) > 0
+		.. " · " .. plural(section.tripCount, _("trip"), _("trips"))
 end
 
 -- All sections live in one list, so one selection state allows at most one arrow per window.
@@ -305,12 +405,14 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 			end,
 		}
 	end
+	local function tableData(direction : Direction) : TableData
+		return { here = params.entityId, direction = direction, rows = {}, selectionState = selectionState }
+	end
 
 	local children : {TreeNodeId} = {}
 	local function add(node : TreeNodeId)
 		children[#children + 1] = node
 	end
-	local here = params.entityId
 
 	if current.failed then
 		add(makeHint(_("Commuter Compass: error (see log)")))
@@ -322,23 +424,19 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 		else
 			if sections.countsKnown then
 				add(makeSection({
-					title = commuterTitle(_("Outbound"), sections.outbound),
+					title = tripTitle(_("Outbound"), sections.outbound),
 					section = sections.outbound,
 					emptyText = _("No commuters leave this town."),
 					showCounts = true,
-					flowOf = function(row : Row) : Selection
-						return { from = here, to = row.entity, animated = usesLines(row) }
-					end,
-				}, makeFold("out"), selectionState))
+					data = tableData("Out"),
+				}, makeFold("out")))
 				add(makeSection({
-					title = commuterTitle(_("Inbound"), sections.inbound),
+					title = tripTitle(_("Inbound"), sections.inbound),
 					section = sections.inbound,
 					emptyText = _("No commuters arrive from other towns."),
 					showCounts = true,
-					flowOf = function(row : Row) : Selection
-						return { from = row.entity, to = here, animated = usesLines(row) }
-					end,
-				}, makeFold("in"), selectionState))
+					data = tableData("In"),
+				}, makeFold("in")))
 			else
 				add(makeHint(_("Commuter data unavailable")))
 			end
@@ -350,10 +448,8 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 					section = sections.nearby,
 					emptyText = "",
 					showCounts = false,
-					flowOf = function(row : Row) : Selection
-						return { from = here, to = row.entity, animated = false }
-					end,
-				}, makeFold("nearby"), selectionState))
+					data = tableData("Nearby"),
+				}, makeFold("nearby")))
 			end
 		end
 	end
