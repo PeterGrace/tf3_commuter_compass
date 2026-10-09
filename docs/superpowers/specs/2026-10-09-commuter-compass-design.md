@@ -102,9 +102,13 @@ only Supplies.
     `hasExpired()` / `getIdentity()`.
   - On unmount, `setActiveOwnerOverride(false)` hands the map back to the town window's own overlay.
   - Never call `setActiveOwner`, and never push a tool onto the ToolStack.
-- **Camera:** `api.gui.camera.focusPosition(midpoint, max(MIN_DISTANCE, gap * FACTOR))`, with MIN_DISTANCE 500 and
-  FACTOR 1.6. Cargo Compass uses 1.2, but in screenshots that put eastern destinations under the town window, which
-  covers the right quarter of the screen while the camera centres on the whole screen.
+- **Camera:** `api.gui.camera.focusPosition(aim, max(MIN_DISTANCE, gap * FACTOR))`, with MIN_DISTANCE 500 and
+  FACTOR 1.6. The camera centres on the whole screen, but the town window covers its right quarter, so `aim` is
+  the midpoint moved toward screen-right by `0.27 * min(distance, 4000)`. Screen-right comes from
+  `getEye()`/`getCenter()`, with the sign checked by `world2Screen`. The camera's heading and tilt are unchanged.
+  Probe findings: `focusPosition` animates (`getCameraData` reads the same right after the call), and it caps the
+  distance at the maximum zoom-out (asked for 6,975, got about 4,055). So zooming out can't clear the window, and
+  shifting the view does.
 
 ## Architecture
 

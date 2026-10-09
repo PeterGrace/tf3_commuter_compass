@@ -134,10 +134,7 @@ local function frameCamera(from : Vec3f, to : Vec3f)
 		debugPrint(LOG_PREFIX .. "camera shift failed: " .. tostring(target))
 		target = midpoint
 	end
-	local aim = target as Vec3f
-	debugPrint(LOG_PREFIX .. string.format("probe camera: midpoint %.0f,%.0f aim %.0f,%.0f gap %.0f distance %.0f", -- PROBE (remove before release)
-		midpoint.x, midpoint.y, aim.x, aim.y, gap, distance))
-	api.gui.camera.focusPosition(aim, distance)
+	api.gui.camera.focusPosition(target as Vec3f, distance)
 end
 
 -- Binds a map action that draws one arrow and makes it the renderer's active owner override.
