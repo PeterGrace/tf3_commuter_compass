@@ -172,33 +172,48 @@ local enum Direction
 	"Nearby"
 end
 
--- Shared with every cell of one section's table (DataTable hands it to newly created cells as `userParam`).
--- The data is fixed while the window is open; only the selection changes, and cells poll it.
-local record TableData
+local DIRECTION_INDEX : {Direction : integer} = { Out = 0, In = 1, Nearby = 2 }
+
+-- Row keys are unique across the card's tables: town entity * 3 + section. With plain entity ids, two tables using
+-- the same cell recipes got their cells mixed up (the Outbound table showed Inbound's numbers and selections).
+local function rowKeyOf(entity : Engine.Entity, direction : Direction) : integer
+	return entity * 3 + DIRECTION_INDEX[direction]
+end
+
+-- One object for the whole card, built once and handed to every table as `userParam`, so whichever table a cell
+-- ends up attached to, it finds its row and section by row key. The data is fixed while the window is open; only
+-- the selection changes, and cells poll it.
+local record CardData
 	here : Engine.Entity
-	direction : Direction
-	rows : {Engine.Entity : Row}
+	rows : {integer : Row}
+	directions : {integer : Direction}
 	selectionState : ReactStateT<Selection>
 end
 
 -- The arrow a row's toggle selects: passengers travel towards whoever they commute to.
-local function flowFor(data : TableData, row : Row) : Selection
-	if data.direction == "In" then
+local function flowFor(data : CardData, rowKey : integer) : Selection
+	local row = data.rows[rowKey]
+	local direction = data.directions[rowKey]
+	if direction == "In" then
 		return { from = row.entity, to = data.here, animated = usesLines(row) }
 	end
-	return { from = data.here, to = row.entity, animated = data.direction == "Out" and usesLines(row) }
+	return { from = data.here, to = row.entity, animated = direction == "Out" and usesLines(row) }
 end
 
-local function isSelected(data : TableData, flow : Selection) : boolean
+local function isSelected(data : CardData, flow : Selection) : boolean
 	local current = data.selectionState:old()
 	return current ~= nil and current.from == flow.from and current.to == flow.to
 end
 
 -- Locate, arrow toggle, and the name (opens the town's window), as the base Destinations table's name cell.
 local NameCell = react.RegisterRecipe("PgraceCommuterCompassNameCell", function(params : Builtin.TableCellParam) : TreeNodeId
-	local data = params.userParam as TableData
+	local data = params.userParam as CardData
 	local row = data.rows[params.rowKey]
-	local flow = flowFor(data, row)
+	if row == nil then
+		-- Never expected; an empty cell beats crashing the whole UI.
+		return builtin.BoxLayout{ children = {} }
+	end
+	local flow = flowFor(data, params.rowKey)
 	-- Cells keep their first userParam, so the toggle polls the shared selection to follow other rows' clicks.
 	local selectedState = engine_react_util.useStepState(function() : boolean
 		return isSelected(data, flow)
@@ -229,13 +244,14 @@ end)
 
 local function makeTextCell(name : string, textOf : function(Row) : string) : Recipe<Builtin.TableCellParam>
 	return react.RegisterRecipe(name, function(params : Builtin.TableCellParam) : TreeNodeId
-		local data = params.userParam as TableData
+		local data = params.userParam as CardData
+		local row = data.rows[params.rowKey]
 		-- A recipe must return a layout; a bare TextView crashes the whole UI ("Recipe child must be a layout").
 		return builtin.BoxLayout{
 			children = {
 				builtin.TextView{
 					meta = { class = "font-scale-body" },
-					text = textOf(data.rows[params.rowKey]),
+					text = row ~= nil and textOf(row) or "",
 				},
 			},
 		}
@@ -257,11 +273,10 @@ end)
 
 -- The base game's table: icons once in the header, aligned columns, sortable by clicking a header.
 -- Starts sorted by distance (column 2), nearest first.
-local function makeTable(section : Section, data : TableData, showCounts : boolean) : TreeNodeId
+local function makeTable(section : Section, direction : Direction, data : CardData, showCounts : boolean) : TreeNodeId
 	local rowKeys : {integer} = {}
 	for i, row in ipairs(section.rows) do
-		rowKeys[i] = row.entity
-		data.rows[row.entity] = row
+		rowKeys[i] = rowKeyOf(row.entity, direction)
 	end
 	local function rowOf(rowKey : integer) : Row
 		return data.rows[rowKey]
@@ -330,7 +345,7 @@ local record SectionSpec
 	section : Section
 	emptyText : string
 	showCounts : boolean
-	data : TableData
+	direction : Direction
 end
 
 local function plural(count : integer, one : string, many : string) : string
@@ -353,7 +368,7 @@ local function makeSectionHeader(title : string, fold : Fold) : TreeNodeId
 	}
 end
 
-local function makeSection(spec : SectionSpec, fold : Fold) : TreeNodeId
+local function makeSection(spec : SectionSpec, data : CardData, fold : Fold) : TreeNodeId
 	local header = makeSectionHeader(spec.title, fold)
 	if not fold.expanded then
 		return header
@@ -362,7 +377,7 @@ local function makeSection(spec : SectionSpec, fold : Fold) : TreeNodeId
 	if #spec.section.rows == 0 then
 		body = makeHint(spec.emptyText)
 	else
-		body = makeTable(spec.section, spec.data, spec.showCounts)
+		body = makeTable(spec.section, spec.direction, data, spec.showCounts)
 	end
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = { header, body } }
 end
@@ -400,9 +415,24 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 			end,
 		}
 	end
-	local function tableData(direction : Direction) : TableData
-		return { here = params.entityId, direction = direction, rows = {}, selectionState = selectionState }
-	end
+	-- Every section's rows, registered once (also for collapsed sections), so cells always find theirs.
+	local cardData = react.useStateLazy(function() : CardData
+		local data : CardData = { here = params.entityId, rows = {}, directions = {}, selectionState = selectionState }
+		local sections = current.sections
+		if sections ~= nil then
+			local function register(section : Section, direction : Direction)
+				for _, row in ipairs(section.rows) do
+					local rowKey = rowKeyOf(row.entity, direction)
+					data.rows[rowKey] = row
+					data.directions[rowKey] = direction
+				end
+			end
+			register(sections.outbound, "Out")
+			register(sections.inbound, "In")
+			register(sections.nearby, "Nearby")
+		end
+		return data
+	end):old()
 
 	local children : {TreeNodeId} = {}
 	local function add(node : TreeNodeId)
@@ -423,15 +453,15 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 					section = sections.outbound,
 					emptyText = _("No commuters leave this town."),
 					showCounts = true,
-					data = tableData("Out"),
-				}, makeFold("out")))
+					direction = "Out",
+				}, cardData, makeFold("out")))
 				add(makeSection({
 					title = tripTitle(_("Inbound"), sections.inbound),
 					section = sections.inbound,
 					emptyText = _("No commuters arrive from other towns."),
 					showCounts = true,
-					data = tableData("In"),
-				}, makeFold("in")))
+					direction = "In",
+				}, cardData, makeFold("in")))
 			else
 				add(makeHint(_("Commuter data unavailable")))
 			end
@@ -443,8 +473,8 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 					section = sections.nearby,
 					emptyText = "",
 					showCounts = false,
-					data = tableData("Nearby"),
-				}, makeFold("nearby")))
+					direction = "Nearby",
+				}, cardData, makeFold("nearby")))
 			end
 		end
 	end
