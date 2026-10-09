@@ -75,7 +75,11 @@ local function queryAll(source : Engine.Entity, destinations : {Engine.Entity : 
 	return query(source, destinations, LAND_USE_SHOP), query(source, destinations, LAND_USE_WORK), query(source, destinations, LAND_USE_USAGE)
 end
 
+local probeGatherCalls = 0 -- PROBE (remove before release)
+
 function commuters.gather(town : Engine.Entity) : {TownData}
+	probeGatherCalls = probeGatherCalls + 1 -- PROBE (remove before release)
+	debugPrint("[commuter_compass] probe module state: gather call #" .. tostring(probeGatherCalls)) -- PROBE (remove before release)
 	local result : {TownData} = {}
 	local sx, sy = getPosition(town)
 	if sx == nil then

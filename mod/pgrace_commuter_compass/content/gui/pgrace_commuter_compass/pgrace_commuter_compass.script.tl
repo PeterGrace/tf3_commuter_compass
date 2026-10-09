@@ -65,7 +65,19 @@ end
 
 local function computeState(townEntity : Engine.Entity) : ListState
 	local ok, resultOrError = pcall(function() : Sections
+		local started = os.clock() -- PROBE (remove before release)
 		local towns = commuters.gather(townEntity)
+		-- PROBE (remove before release)
+		debugPrint(LOG_PREFIX .. string.format("probe gather: %s, %d other towns, %.1f ms", api.engine.util.getEntityName(townEntity), #towns, (os.clock() - started) * 1000))
+		for _, other in ipairs(towns) do
+			if other.outbound ~= nil and other.inbound ~= nil then
+				local o = other.outbound
+				local i = other.inbound
+				debugPrint(LOG_PREFIX .. string.format("probe %s: out work %d shop %d usage %d lines %d | in work %d shop %d usage %d lines %d",
+					other.name, o.work, o.shop, o.usageCount, o.linesUseCount, i.work, i.shop, i.usageCount, i.linesUseCount))
+			end
+		end
+		-- END PROBE
 		return rank.buildSections(towns, ROW_CAP, NEARBY_COUNT)
 	end)
 	if ok then
