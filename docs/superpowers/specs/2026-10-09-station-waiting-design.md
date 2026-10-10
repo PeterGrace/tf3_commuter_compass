@@ -109,7 +109,7 @@ Waiting passengers
 
 - **The card:** `StationPlugin` and `hasPassengerLines`, registered by a new `station_plugin.res.lua` (order 45).
 - **State:**
-  - `useStepStateTimer` recounts every second, inside a `pcall`, and logs an error only when it changes;
+  - `useStepStateTimer` recounts every 2 seconds, inside a `pcall`, and logs an error only when it changes;
   - one `WaitingData` object holds the rows and the selection for the card's lifetime;
   - the selected arrow is kept by destination.
 - **Cells:** reuse the town card's cell helpers where the shapes match. Each cell recipe returns a BoxLayout.
