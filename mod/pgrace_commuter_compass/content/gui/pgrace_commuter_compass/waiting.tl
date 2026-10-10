@@ -111,21 +111,6 @@ local function resolve(target : Engine.Entity, capacities : function() : {Engine
 	return nil
 end
 
-local PROBE_COMPONENTS : {string} = { "TOWN_BUILDING", "INDUSTRY", "CONSTRUCTION", "PERSON_CAPACITY", "TOWN" } -- PROBE (remove before release)
-
-local function probeTarget(target : Engine.Entity, destination : Engine.Entity) -- PROBE (remove before release)
-	local has : {string} = {}
-	for _, name in ipairs(PROBE_COMPONENTS) do
-		local componentType = (api.type.ComponentType as any as {string : Engine.ComponentType})[name]
-		if api.engine.getComponent(target, componentType) ~= nil then
-			has[#has + 1] = name
-		end
-	end
-	debugPrint(LOG_PREFIX .. string.format("probe target %s (%s): components [%s] -> destination %s (%s)",
-		tostring(target), tostring(api.engine.util.getEntityName(target)), table.concat(has, ","),
-		tostring(destination), destination ~= nil and tostring(api.engine.util.getEntityName(destination)) or "-"))
-end
-
 local function gather(stationGroup : Engine.Entity) : {Waiter}
 	local passenger = api.res.cargoTypeRep.getPassengerCargoTypeId()
 	local capacityMap : {Engine.Entity : Engine.Entity} = nil
@@ -136,10 +121,7 @@ local function gather(stationGroup : Engine.Entity) : {Waiter}
 
 	local result : {Waiter} = {}
 	local seen : {Engine.Entity : boolean} = {}
-	local engineCount = 0 -- PROBE (remove before release)
-	local probed = 0 -- PROBE (remove before release)
 	for _, lineStop in ipairs(playerLineStops(stationGroup)) do
-		engineCount = engineCount + api.engine.system.simEntityAtTerminalSystem.getLineStopSimEntitiesCount(lineStop.line, lineStop.stop, passenger) -- PROBE
 		for _, person in ipairs(api.engine.system.simEntityAtTerminalSystem.getLineStopSimEntities(lineStop.line, lineStop.stop, passenger)) do
 			if not seen[person] then
 				seen[person] = true
@@ -147,17 +129,11 @@ local function gather(stationGroup : Engine.Entity) : {Waiter}
 				local simPerson = api.engine.getComponent(person, api.type.ComponentType.SIM_PERSON) as Engine.Component.SimPerson
 				if atTerminal ~= nil and simPerson ~= nil then
 					local destination = resolve(simPerson.targetOrAtEntity, capacities)
-					if probed < 5 then -- PROBE (remove before release)
-						probed = probed + 1
-						probeTarget(simPerson.targetOrAtEntity, destination)
-					end
 					result[#result + 1] = { line = atTerminal.line, destination = destination }
 				end
 			end
 		end
 	end
-	debugPrint(LOG_PREFIX .. string.format("probe waiting: %d people read, engine count %d over %d line stops", -- PROBE
-		#result, engineCount, #playerLineStops(stationGroup)))
 	return result
 end
 
@@ -170,7 +146,6 @@ local function nameOf(entity : Engine.Entity) : string
 end
 
 function waiting.count(stationGroup : Engine.Entity) : PgraceCommuterCompassRank.WaitingTable
-	local started = os.clock() -- PROBE (remove before release)
 	local waiters = gather(stationGroup)
 	local here = waiting.positionOf(stationGroup)
 	local info : PgraceCommuterCompassRank.WaitingInfo = {
@@ -192,10 +167,7 @@ function waiting.count(stationGroup : Engine.Entity) : PgraceCommuterCompassRank
 			end
 		end
 	end
-	local result = rank.groupWaiting(waiters, info)
-	debugPrint(LOG_PREFIX .. string.format("probe count: %s, %d waiting, %d destinations, %.1f ms", -- PROBE
-		nameOf(stationGroup), result.totalWaiting, result.destinationCount, (os.clock() - started) * 1000))
-	return result
+	return rank.groupWaiting(waiters, info)
 end
 
 return waiting

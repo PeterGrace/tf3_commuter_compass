@@ -127,6 +127,25 @@ Temporary probes, marked `-- PROBE (remove before release)`, log:
 
 The destination resolution (step 4) gets finalized from these results. The findings go into this spec.
 
+## Findings (spike, 2026-10-09)
+
+Country Club Station, a busy bus hub with 9 player line stops and 246–313 people waiting:
+
+- **Targets:** every sampled `SIM_PERSON.targetOrAtEntity` was a **town building**: residential, commercial or
+  industrial ("Industrial Building" is a town building in the industrial district, not an industry). Each has
+  `TOWN_BUILDING` and `PERSON_CAPACITY`, and `TOWN_BUILDING.town` gives the town. The other `resolve` cases (industry,
+  person capacity, construction) stay as fallbacks. No sample hit them, and no person ended up Unknown.
+- **Counts:** the people read always equalled `getLineStopSimEntitiesCount` summed over the line stops (3/3, 313/313,
+  276/276, 246/246). The waiting hall needs no separate handling.
+- **Timing:** 0.2–16 ms per count (16 ms on the first count of a session, then 1–3 ms). Live updates would be
+  affordable, but the snapshot plus Refresh stays.
+- **Layout:** an unweighted column takes its widest content. Long line names squeezed Destination to nothing, and its
+  buttons were drawn under Distance. The fix:
+  - Destination and Line share the spare width at 7:6;
+  - Waiting has an icon header (`symbol_person_multiple.tga`);
+  - line names longer than 14 characters are shortened in the middle (`rank.shortenMiddle`).
+- **Tooltips:** a `meta.tooltip` on a `BoxLayout` never shows. Pass it to `makeEntityWindowButton` (7th argument).
+
 ## Testing
 
 - **Unit tests (`tests/rank_test.lua`):**
