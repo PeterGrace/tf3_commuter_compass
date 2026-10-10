@@ -102,6 +102,9 @@ global record PgraceCommuterCompassRank
 	formatDistance : function(metres : number) : string
 	-- "45%"; "<1%" for small non-zero shares (so a rider is never shown as "0%"); "-" for nil (as the base table).
 	formatPercent : function(fraction : number) : string
+	-- The plural form a language uses for a count: "one", "few", "many" or "other" (the CLDR categories for
+	-- integers). The language is a TF3 code such as "de" or "pt_BR"; unknown ones get English's one/other.
+	pluralCategory : function(language : string, count : integer) : string
 	-- Groups waiters per destination and line; see WaitingTable for the order.
 	groupWaiting : function(waiters : {Waiter}, info : WaitingInfo) : WaitingTable
 	-- At most `maxChars` characters (UTF-8 aware): the start, "…", and a longer end, since names like

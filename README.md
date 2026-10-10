@@ -91,28 +91,40 @@ Station card:
 - [ ] Turning on the arrow in one of a destination's rows lights only that row's toggle.
 - [ ] Arrows go from the station to the destination, and stay clear of the window.
 
-Translations (switch the game to German):
+Translations (switch the game's language):
 
-- [ ] Both cards, their headers, columns, hints and tooltips are in German.
-- [ ] Distances use a decimal comma ("2,2 km") and counts a thousands dot ("1.240"), in the tables and on the arrow.
+- [ ] German: both cards, their headers, columns, hints and tooltips are translated; distances read "2,2 km",
+  counts "1.240", percentages "45 %".
+- [ ] Polish or Russian: counts take the right form (Russian "1 город", "2 города", "5 городов").
+- [ ] Japanese, Korean or Chinese: the text renders (no boxes) and counts read naturally ("5町").
 
 ## Translations
 
 Text shown in the game is wrapped in `_("...")`; the English text is the key. Translations live in
-`mod/pgrace_commuter_compass/strings.json`, one block per language code (`"de"` so far):
+`mod/pgrace_commuter_compass/strings.json`, one block per language, for all 12 languages TF3 ships besides English
+(de, es, fr, it, ja, ko, nl, pl, pt_BR, ru, zh_CN, zh_TW). Terms follow the base game's own translations
+(`base/strings/<lang>/LC_MESSAGES/base.mo`).
 
-```json
-{ "de": { "Waiting passengers": "Wartende Passagiere" } }
-```
+**Counts** ("5 towns") have one key per plural form: `"{count} towns|one"`, `"|few"`, `"|many"`, `"|other"`. The
+script picks the form with `rank.pluralCategory` (CLDR rules for the player's language, read from
+`app.getUserProfile():getLanguage().code`). Each language translates only the forms it uses:
 
-A key missing for a language shows in English. `just release-check` fails if any `_()` key lacks an entry for a
-language in the file, and warns about entries no longer used. Distances and counts use the game's formatters
-(`api.util.formatLength`, `api.util.lang.formatInt`), so they follow the player's language and units. The Mod Hub
-name, summary and description are translated under `localization` in `_metadata/modinfo.json`; `description.html`
-stays English (mod.io shows only English for now).
+| Languages | Forms |
+| --- | --- |
+| en, de, es, it, nl, fr, pt_BR | one, other (French and Portuguese count 0 as one) |
+| pl, ru | one, few, many |
+| ja, ko, zh_CN, zh_TW | other |
 
-To add a language: copy the `"de"` block, change the code (as in `base/strings/`, e.g. `fr`, `pt_BR`), translate the
-values, and run `just verify`.
+English needs entries only for these plural keys; its other text is its own key.
+
+`just release-check` fails if a language lacks a key or form it needs, or a translation drops a `{placeholder}`, and
+warns about entries no longer needed. Distances and counts use the game's formatters (`api.util.formatLength`,
+`api.util.lang.formatInt`), and percentages are a key (`"{percent}%"`), so all follow the player's language and units.
+The Mod Hub name, summary and description are translated under `localization` in `_metadata/modinfo.json` (summaries
+are checked against the 100-character limit); `description.html` stays English (mod.io shows only English for now).
+
+To add a language: copy a block in `strings.json`, change the code, translate the values, add its plural forms to
+`PLURAL_FORMS` in `tools/release_check.py` and to `rank.pluralCategory`, and run `just verify`.
 
 ## Releasing
 

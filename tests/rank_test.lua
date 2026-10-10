@@ -212,3 +212,51 @@ t.test("shortenMiddle: counts characters, not bytes", function()
 	t.eq(rank.shortenMiddle("Zürich Hbf – Genève Cornavin", 14), "Züri…Cornavin")
 	t.eq(rank.shortenMiddle("Zürich", 6), "Zürich")
 end)
+
+t.test("pluralCategory: one/other languages (English, German, Spanish, Italian, Dutch)", function()
+	for _, lang in ipairs({ "en", "de", "es", "it", "nl" }) do
+		t.eq(rank.pluralCategory(lang, 1), "one")
+		t.eq(rank.pluralCategory(lang, 0), "other")
+		t.eq(rank.pluralCategory(lang, 2), "other")
+		t.eq(rank.pluralCategory(lang, 21), "other")
+	end
+end)
+
+t.test("pluralCategory: French and Brazilian Portuguese count 0 as singular", function()
+	for _, lang in ipairs({ "fr", "pt_BR" }) do
+		t.eq(rank.pluralCategory(lang, 0), "one")
+		t.eq(rank.pluralCategory(lang, 1), "one")
+		t.eq(rank.pluralCategory(lang, 2), "other")
+	end
+end)
+
+t.test("pluralCategory: Polish one/few/many", function()
+	t.eq(rank.pluralCategory("pl", 1), "one")
+	t.eq(rank.pluralCategory("pl", 2), "few")
+	t.eq(rank.pluralCategory("pl", 4), "few")
+	t.eq(rank.pluralCategory("pl", 5), "many")
+	t.eq(rank.pluralCategory("pl", 12), "many")
+	t.eq(rank.pluralCategory("pl", 21), "many")
+	t.eq(rank.pluralCategory("pl", 22), "few")
+	t.eq(rank.pluralCategory("pl", 0), "many")
+end)
+
+t.test("pluralCategory: Russian one/few/many", function()
+	t.eq(rank.pluralCategory("ru", 1), "one")
+	t.eq(rank.pluralCategory("ru", 21), "one")
+	t.eq(rank.pluralCategory("ru", 11), "many")
+	t.eq(rank.pluralCategory("ru", 2), "few")
+	t.eq(rank.pluralCategory("ru", 14), "many")
+	t.eq(rank.pluralCategory("ru", 24), "few")
+	t.eq(rank.pluralCategory("ru", 5), "many")
+	t.eq(rank.pluralCategory("ru", 0), "many")
+end)
+
+t.test("pluralCategory: Japanese, Korean and Chinese have one form; unknown languages fall back to one/other", function()
+	for _, lang in ipairs({ "ja", "ko", "zh_CN", "zh_TW" }) do
+		t.eq(rank.pluralCategory(lang, 1), "other")
+		t.eq(rank.pluralCategory(lang, 5), "other")
+	end
+	t.eq(rank.pluralCategory("xx", 1), "one")
+	t.eq(rank.pluralCategory(nil, 3), "other")
+end)

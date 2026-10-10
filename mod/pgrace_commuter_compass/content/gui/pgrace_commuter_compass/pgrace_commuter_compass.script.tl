@@ -510,8 +510,35 @@ local record SectionSpec
 	direction : Direction
 end
 
-local function plural(count : integer, one : string, many : string) : string
-	return formatCount(count) .. " " .. (count == 1 and one or many)
+-- A count with its noun, in the form the player's language uses for that count. Each form is its own key
+-- ("{count} towns|one", "|few", "|many", "|other"); a language translates only the forms its plural rule uses
+-- (tools/release_check.py knows which). Mods get no plural-aware gettext, so the rule is ours (rank.pluralCategory).
+local record PluralForms
+	one : string
+	few : string
+	many : string
+	other : string
+end
+
+local function currentLanguage() : string
+	local ok, code = pcall(function() : string
+		return app.getUserProfile():getLanguage().code
+	end)
+	return ok and code as string or "en"
+end
+
+local function countText(count : integer, forms : PluralForms) : string
+	local category = rank.pluralCategory(currentLanguage(), count)
+	local template = (forms as {string : string})[category] or forms.other
+	local number = formatCount(count)
+	return (template:gsub("{count}", function() : string return number end))
+end
+
+local function townsText(count : integer) : string
+	return countText(count, {
+		one = _("{count} towns|one"), few = _("{count} towns|few"),
+		many = _("{count} towns|many"), other = _("{count} towns|other"),
+	})
 end
 
 -- Clickable header with the game's combobox arrows (as in collapsible_checkbox_list).
@@ -546,8 +573,11 @@ end
 
 local function tripTitle(label : string, section : Section) : string
 	return label
-		.. " · " .. plural(section.townCount, _("town"), _("towns"))
-		.. " · " .. plural(section.tripCount, _("trip"), _("trips"))
+		.. " · " .. townsText(section.townCount)
+		.. " · " .. countText(section.tripCount, {
+			one = _("{count} trips|one"), few = _("{count} trips|few"),
+			many = _("{count} trips|many"), other = _("{count} trips|other"),
+		})
 end
 
 -- All sections live in one list, so one selection state allows at most one arrow per window.
@@ -653,7 +683,7 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 				-- Without commuter data every town lands here, so don't claim they have no commuters.
 				local nearbyLabel = sections.countsKnown and _("Nearby, no commuters") or _("Nearest towns")
 				add(makeSection({
-					title = nearbyLabel .. " · " .. plural(#sections.nearby.rows, _("town"), _("towns")),
+					title = nearbyLabel .. " · " .. townsText(#sections.nearby.rows),
 					section = sections.nearby,
 					emptyText = "",
 					showCounts = false,
@@ -976,8 +1006,14 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 	else
 		local tbl = current.waitingTable
 		add(builtin.TextView(react.ref(headerRef), {
-			text = _("Waiting") .. " · " .. plural(tbl.totalWaiting, _("person"), _("people"))
-				.. " · " .. plural(tbl.destinationCount, _("destination"), _("destinations")),
+			text = _("Waiting") .. " · " .. countText(tbl.totalWaiting, {
+					one = _("{count} people|one"), few = _("{count} people|few"),
+					many = _("{count} people|many"), other = _("{count} people|other"),
+				})
+				.. " · " .. countText(tbl.destinationCount, {
+					one = _("{count} destinations|one"), few = _("{count} destinations|few"),
+					many = _("{count} destinations|many"), other = _("{count} destinations|other"),
+				}),
 		}))
 		-- Refill in place: cells read rows from this same object.
 		local wasShown : {integer : boolean} = {}

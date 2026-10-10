@@ -105,7 +105,15 @@ for lang, loc in (info.get("localization") or {}).items():
         if value and (len(value) > limit or "\n" in value):
             errors.append(f"modinfo localization {lang} {key} must be 1-{limit} chars without line breaks (is {len(value)})")
 
-# Translations: every _("...") key in the scripts needs an entry for each language in strings.json.
+# Translations: every _("...") key in the scripts needs an entry for each language in strings.json. Keys ending in
+# "|one", "|few", "|many" or "|other" are plural forms; a language needs only the forms its plural rule uses (as
+# rank.pluralCategory), and English needs those too (its other text is its own key).
+PLURAL_FORMS = {
+    **{lang: {"one", "other"} for lang in ("en", "de", "es", "fr", "it", "nl", "pt_BR")},
+    "pl": {"one", "few", "many"},
+    "ru": {"one", "few", "many"},
+    **{lang: {"other"} for lang in ("ja", "ko", "zh_CN", "zh_TW")},
+}
 strings_path = MOD / "strings.json"
 if strings_path.exists():
     translations = json.loads(strings_path.read_text(encoding="utf-8"))
@@ -113,16 +121,30 @@ if strings_path.exists():
     for tl in (MOD / "content").rglob("*.tl"):
         if not tl.name.endswith(".d.tl"):
             used |= {m.encode().decode("unicode_escape") for m in re.findall(r'_\("((?:[^"\\]|\\.)*)"\)', tl.read_text(encoding="utf-8"))}
+    plural_keys = {k for k in used if re.search(r"\|(one|few|many|other)$", k)}
+    for lang in sorted(set(PLURAL_FORMS) - set(translations)):
+        warnings.append(f"strings.json: no {lang} translations")
     for lang, table in sorted(translations.items()):
         if not isinstance(table, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()):
             errors.append(f"strings.json {lang}: must map text to text")
             continue
-        missing = sorted(used - table.keys())
+        if lang not in PLURAL_FORMS:
+            errors.append(f"strings.json {lang}: unknown language (add its plural forms to PLURAL_FORMS)")
+            continue
+        forms = PLURAL_FORMS[lang]
+        required = {k for k in plural_keys if k.rsplit("|", 1)[1] in forms}
+        if lang != "en":
+            required |= used - plural_keys
+        missing = sorted(required - table.keys())
         if missing:
             errors.append(f"strings.json {lang}: {len(missing)} untranslated: {missing}")
-        unused = sorted(table.keys() - used)
+        unused = sorted(table.keys() - required)
         if unused:
-            warnings.append(f"strings.json {lang}: {len(unused)} no longer used: {unused}")
+            warnings.append(f"strings.json {lang}: {len(unused)} not needed: {unused}")
+        for key in required & table.keys():
+            lost = [p for p in re.findall(r"\{\w+\}", key) if p not in table[key]]
+            if lost:
+                errors.append(f"strings.json {lang}: {key!r} lost placeholder(s) {lost}")
 
 meta = MOD / "_metadata"
 images = sorted(p for p in meta.iterdir() if re.fullmatch(r"\d+\.(png|jpg)", p.name))

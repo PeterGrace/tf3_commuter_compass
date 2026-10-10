@@ -13,6 +13,61 @@
             "name": "Commuter Compass",
             "summary": "Karten im Stadt- und Haltestellenfenster: wohin Pendler und wartende Passagiere wollen und wie weit.",
             "description": "Fügt dem Stadtfenster eine Pendler-Karte hinzu. Ausgehend zeigt die Städte, in denen die Einwohner dieser Stadt arbeiten oder einkaufen; Eingehend die Städte, deren Einwohner hier arbeiten oder einkaufen. Jede sortierbare Tabelle zeigt die Luftlinienentfernung, Arbeits- und Einkaufsfahrten und wie viele davon deine Linien nutzen. Eine dritte Liste zeigt die drei nächsten Städte ohne Pendler. Das Haltestellenfenster erhält eine Karte „Wartende Passagiere“: die Menschen, die auf deine Linien warten, nach Endziel und Linie gruppiert und live aktualisiert. Jede Zeile kann einen Pfeil auf der Karte zeigen, mit der Entfernung am Pfeil. Ein Geschwister von Cargo Compass. Kosmetisch: Errungenschaften bleiben aktiviert."
+        },
+        "es": {
+            "name": "Commuter Compass",
+            "summary": "Tarjetas de localidad y estación: adónde van viajeros y pasajeros en espera, y a qué distancia.",
+            "description": "Añade una tarjeta de viajeros a la ventana de la localidad: Salientes muestra las localidades donde trabajan o compran sus habitantes; Entrantes, las localidades cuyos habitantes trabajan o compran aquí. Cada tabla ordenable muestra la distancia en línea recta, los viajes de trabajo y de compras y cuántos usan tus líneas. Una tercera lista muestra las tres localidades más cercanas sin viajeros. La ventana de la estación recibe una tarjeta «Pasajeros esperando»: quienes esperan tus líneas, agrupados por destino final y línea, actualizada en directo. Cada fila puede mostrar una flecha en el mapa con la distancia. Hermano de Cargo Compass. Cosmético: los logros siguen activos."
+        },
+        "fr": {
+            "name": "Commuter Compass",
+            "summary": "Cartes ville et gare : où vont les navetteurs et les passagers en attente, et à quelle distance.",
+            "description": "Ajoute une carte Navetteurs à la fenêtre de la ville : Sortants liste les villes où ses habitants travaillent ou font leurs achats ; Entrants, les villes dont les habitants viennent y travailler ou faire leurs achats. Chaque tableau triable indique la distance à vol d’oiseau, les trajets travail et achats, et la part qui emprunte vos lignes. Une troisième liste donne les trois villes les plus proches sans navetteurs. La fenêtre de la gare reçoit une carte « Passagers en attente » : les personnes qui attendent vos lignes, groupées par destination finale et par ligne, mise à jour en direct. Chaque ligne peut afficher une flèche sur la carte, avec la distance. Cousin de Cargo Compass. Cosmétique : les succès restent actifs."
+        },
+        "it": {
+            "name": "Commuter Compass",
+            "summary": "Schede di cittadina e stazione: dove vanno i pendolari e i passeggeri in attesa, e a che distanza.",
+            "description": "Aggiunge una scheda Pendolari alla finestra della cittadina: In uscita elenca le cittadine dove i residenti lavorano o fanno acquisti; In entrata le cittadine i cui residenti lavorano o fanno acquisti qui. Ogni tabella ordinabile mostra la distanza in linea d’aria, i viaggi per lavoro e acquisti e quanti usano le tue linee. Una terza lista mostra le tre cittadine più vicine senza pendolari. La finestra della stazione ottiene una scheda «Passeggeri in attesa»: chi aspetta le tue linee, raggruppato per destinazione finale e linea, aggiornata in tempo reale. Ogni riga può mostrare una freccia sulla mappa con la distanza. Fratello di Cargo Compass. Cosmetica: gli obiettivi restano attivi."
+        },
+        "ja": {
+            "name": "Commuter Compass",
+            "summary": "町と駅のウィンドウに表示：通勤者と待機中の旅客の行き先と距離。",
+            "description": "町のウィンドウに通勤者カードを追加します。流出は住民が働く・買物に行く町、流入はここで働く・買物をする住民の町を表示します。並べ替え可能な各表には直線距離、仕事と買物の移動回数、そのうちあなたの路線を使う割合が表示されます。3つ目のリストは通勤者のいない最寄りの3町です。駅のウィンドウには「待機中の旅客」カードが追加され、あなたの路線を待つ人々を最終目的地と路線ごとにリアルタイムで表示します。各行からマップ上に距離付きの矢印を表示できます。Cargo Compass の姉妹MODです。見た目のみの変更で、実績は有効のままです。"
+        },
+        "ko": {
+            "name": "Commuter Compass",
+            "summary": "마을·정류장 창 카드: 통근자와 대기 승객이 어디로, 얼마나 멀리 가는지.",
+            "description": "마을 창에 통근자 카드를 추가합니다. 유출은 주민이 일하거나 쇼핑하러 가는 마을을, 유입은 이곳에서 일하거나 쇼핑하는 주민의 마을을 보여 줍니다. 정렬 가능한 각 표에는 직선 거리, 출근·쇼핑 이동 횟수, 그중 내 노선을 이용하는 비율이 표시됩니다. 세 번째 목록은 통근자가 없는 가장 가까운 마을 세 곳입니다. 정류장 창에는 '대기 중인 승객' 카드가 추가되어 내 노선을 기다리는 사람들을 최종 목적지와 노선별로 실시간 표시합니다. 각 행에서 거리가 표시된 화살표를 지도에 띄울 수 있습니다. Cargo Compass의 자매 모드입니다. 외형 전용이라 업적이 유지됩니다."
+        },
+        "nl": {
+            "name": "Commuter Compass",
+            "summary": "Kaarten in stad- en stationsvenster: waar forenzen en wachtende reizigers heen gaan, en hoe ver.",
+            "description": "Voegt een Forenzen-kaart toe aan het stadsvenster: Uitgaand toont de steden waar de inwoners werken of winkelen; Inkomend de steden waarvan de inwoners hier werken of winkelen. Elke sorteerbare tabel toont de afstand hemelsbreed, werk- en winkelritten en hoeveel daarvan jouw lijnen gebruiken. Een derde lijst toont de drie dichtstbijzijnde steden zonder forenzen. Het stationsvenster krijgt een kaart 'Wachtende reizigers': de mensen die op jouw lijnen wachten, per eindbestemming en lijn, live bijgewerkt. Elke rij kan een pijl op de kaart tonen, met de afstand. Een broertje van Cargo Compass. Cosmetisch: prestaties blijven actief."
+        },
+        "pl": {
+            "name": "Commuter Compass",
+            "summary": "Karty w oknie miasta i dworca: dokąd jadą dojeżdżający i oczekujący pasażerowie, i jak daleko.",
+            "description": "Dodaje kartę Dojazdy do okna miasta: Wyjazdy pokazuje miasta, w których mieszkańcy pracują lub robią zakupy; Przyjazdy – miasta, których mieszkańcy pracują lub robią zakupy tutaj. Każda sortowalna tabela pokazuje odległość w linii prostej, przejazdy do pracy i na zakupy oraz ile z nich korzysta z twoich linii. Trzecia lista pokazuje trzy najbliższe miasta bez dojazdów. Okno dworca otrzymuje kartę „Oczekujący pasażerowie”: osoby czekające na twoje linie, pogrupowane według celu podróży i linii, aktualizowane na żywo. Każdy wiersz może pokazać strzałkę na mapie z odległością. Brat Cargo Compass. Kosmetyczny: osiągnięcia pozostają aktywne."
+        },
+        "pt_BR": {
+            "name": "Commuter Compass",
+            "summary": "Cartões de município e estação: para onde vão viajantes e passageiros aguardando, e a que distância.",
+            "description": "Adiciona um cartão Viajantes à janela do município: Saindo lista os municípios onde os moradores trabalham ou fazem compras; Chegando, os municípios cujos moradores trabalham ou fazem compras aqui. Cada tabela ordenável mostra a distância em linha reta, as viagens a trabalho e a compras e quantas usam suas linhas. Uma terceira lista mostra os três municípios mais próximos sem viajantes. A janela da estação ganha um cartão “Passageiros aguardando”: quem espera suas linhas, agrupado por destino final e linha, atualizado ao vivo. Cada linha da tabela pode mostrar uma seta no mapa com a distância. Irmão do Cargo Compass. Cosmético: as conquistas continuam ativas."
+        },
+        "ru": {
+            "name": "Commuter Compass",
+            "summary": "Карточки города и остановки: куда едут жители и ожидающие пассажиры и как далеко.",
+            "description": "Добавляет в окно города карточку «Поездки жителей»: «Исходящие» — города, где жители работают или делают покупки; «Входящие» — города, жители которых работают или делают покупки здесь. Каждая сортируемая таблица показывает расстояние по прямой, поездки на работу и за покупками и долю тех, что идут по вашим маршрутам. Третий список — три ближайших города без поездок. Окно остановки получает карточку «Ожидающие пассажиры»: люди, ждущие ваши маршруты, по конечному направлению и маршруту, с обновлением в реальном времени. Каждая строка может показать стрелку на карте с расстоянием. Брат Cargo Compass. Косметический: достижения остаются доступными."
+        },
+        "zh_CN": {
+            "name": "Commuter Compass",
+            "summary": "城镇与车站窗口卡片：通勤者和候车乘客要去哪里、有多远。",
+            "description": "为城镇窗口添加通勤者卡片：“流出”列出居民去工作或购物的城镇；“流入”列出来此工作或购物的居民所在城镇。每个可排序的表格显示直线距离、工作和购物出行次数，以及其中使用你的线路的比例。第三个列表显示没有通勤者的三个最近城镇。车站窗口新增“候车乘客”卡片：按最终目的地和线路分组显示等候你的线路的人，实时更新。每一行都可以在地图上显示带距离的箭头。Cargo Compass 的姊妹模组。仅改变外观：成就保持可用。"
+        },
+        "zh_TW": {
+            "name": "Commuter Compass",
+            "summary": "城鎮與車站視窗卡片：通勤者與候車乘客要去哪裡、有多遠。",
+            "description": "為城鎮視窗新增通勤者卡片：「流出」列出居民去工作或購物的城鎮；「流入」列出來此工作或購物的居民所在城鎮。每個可排序的表格顯示直線距離、工作與購物出行次數，以及其中使用你的路線的比例。第三個列表顯示沒有通勤者的三個最近城鎮。車站視窗新增「候車乘客」卡片：依最終目的地與路線分組顯示等候你的路線的人，即時更新。每一列都可以在地圖上顯示附距離的箭頭。Cargo Compass 的姊妹模組。僅改變外觀：成就保持可用。"
         }
     },
     "tags": [
