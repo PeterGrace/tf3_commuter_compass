@@ -6,6 +6,8 @@
         "gui/pgrace_commuter_compass/pgrace_commuter_compass.script.tl",
         "gui/pgrace_commuter_compass/rank.d.tl",
         "gui/pgrace_commuter_compass/rank.tl",
-        "gui/pgrace_commuter_compass/town_plugin.res.lua"
+        "gui/pgrace_commuter_compass/town_plugin.res.lua",
+        "gui/pgrace_commuter_compass/waiting.d.tl",
+        "gui/pgrace_commuter_compass/waiting.tl"
     ]
 }
