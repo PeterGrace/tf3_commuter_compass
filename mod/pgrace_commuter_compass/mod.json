@@ -1,6 +1,6 @@
 {
     "modId": "pgrace_commuter_compass",
-    "revision": 1,
+    "revision": 2,
     "severityAdd": "None",
     "severityRemove": "None",
     "cosmetic": true,
