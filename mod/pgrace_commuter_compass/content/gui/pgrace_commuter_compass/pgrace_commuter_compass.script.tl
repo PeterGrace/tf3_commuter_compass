@@ -779,11 +779,19 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		}
 	end):old()
 	local current = state:old()
+	local probeHidden = react.useState(false) -- PROBE (remove before release)
 
 	local children : {TreeNodeId} = {}
 	local function add(node : TreeNodeId)
 		children[#children + 1] = node
 	end
+	add(builtin.ToggleButton{ -- PROBE (remove before release)
+		content = builtin.TextView{ text = "Hide table (probe)" },
+		value = probeHidden:old() and 1 or 0,
+		onValueChange = function(value : integer)
+			probeHidden:set(value == 1)
+		end,
+	})
 
 	if current.failed then
 		add(makeHint(_("Commuter Compass: error (see log)")))
@@ -809,7 +817,9 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 				}
 			end
 		end
-		if #tbl.rows == 0 then
+		if probeHidden:old() then -- PROBE (remove before release)
+			add(makeHint("(table hidden by probe)"))
+		elseif #tbl.rows == 0 then
 			add(makeHint(_("Nobody is waiting here.")))
 		else
 			add(makeWaitingTable(data))
