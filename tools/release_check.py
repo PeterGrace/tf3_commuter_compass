@@ -123,7 +123,8 @@ if strings_path.exists():
             used |= {m.encode().decode("unicode_escape") for m in re.findall(r'_\("((?:[^"\\]|\\.)*)"\)', tl.read_text(encoding="utf-8"))}
     plural_keys = {k for k in used if re.search(r"\|(one|few|many|other)$", k)}
     for lang in sorted(set(PLURAL_FORMS) - set(translations)):
-        warnings.append(f"strings.json: no {lang} translations")
+        if lang != "en" or plural_keys:  # English needs entries only for plural keys
+            warnings.append(f"strings.json: no {lang} translations")
     for lang, table in sorted(translations.items()):
         if not isinstance(table, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()):
             errors.append(f"strings.json {lang}: must map text to text")
