@@ -51,8 +51,9 @@ Waiting passengers
 - **Sorting:** starts sorted by Waiting, descending. Headers re-sort.
 - **Header:** "Waiting · N people · M destinations". The card recounts every second
   (`engine_react_util.useStepStateTimer`) and re-renders only when the result changes.
-  - **Stable rows:** each row is keyed by its destination entity (the Unknown row by 0), so a destination keeps its
-    row and cells across updates.
+  - **Stable rows:** each destination and line gets a row key once, so it keeps its row and cells across updates.
+    The table's row keys only ever grow; rows nobody waits for right now are hidden with `fnUserFilter`, as the base
+    Statistics tables do. (Changing the row keys rebuilds the table, and the window jumped to mid-table.)
   - **Live cells:** the cells poll the card's shared row map, which is refilled in place on every update.
   - **The arrow** stays until the player turns it off.
 - **Special states:**

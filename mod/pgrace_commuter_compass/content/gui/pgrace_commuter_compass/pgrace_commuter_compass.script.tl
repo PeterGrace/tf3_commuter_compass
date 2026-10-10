@@ -584,6 +584,12 @@ local record WaitingData
 	-- updates.
 	keys : {string : integer}
 	nextKey : integer
+	-- Every row key handed out, in order. The table gets this list and hides the rows nobody waits for now
+	-- (`fnUserFilter`): changing the table's row keys rebuilds it, and the window then jumps to mid-table.
+	rowKeys : {integer}
+	-- The latest row for every key handed out, kept while the row is hidden. A key always means the same destination
+	-- and line, so the name cell (which doesn't poll) reads this.
+	known : {integer : WaitingRow}
 end
 
 local function waitingRowKey(data : WaitingData, row : WaitingRow) : integer
@@ -593,6 +599,13 @@ local function waitingRowKey(data : WaitingData, row : WaitingRow) : integer
 		data.nextKey = data.nextKey + 1
 		key = data.nextKey
 		data.keys[id] = key
+		-- A new list, so the table sees the change.
+		local rowKeys : {integer} = {}
+		for i, k in ipairs(data.rowKeys) do
+			rowKeys[i] = k
+		end
+		rowKeys[#rowKeys + 1] = key
+		data.rowKeys = rowKeys
 	end
 	return key
 end
@@ -605,7 +618,7 @@ end
 -- A row key always means the same destination and line, so only the selection needs polling here.
 local WaitingNameCell = react.RegisterRecipe("PgraceCommuterCompassWaitingNameCell", function(params : Builtin.TableCellParam) : TreeNodeId
 	local data = params.userParam as WaitingData
-	local row = data.rows[params.rowKey]
+	local row = data.known[params.rowKey]
 	if row == nil then
 		return builtin.BoxLayout{ children = {} }
 	end
@@ -692,7 +705,7 @@ local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCe
 end)
 
 -- Starts sorted by Waiting (column 3), largest first.
-local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeNodeId
+local function makeWaitingTable(data : WaitingData) : TreeNodeId
 	-- Rows are refilled on every update; a key the table still holds from before sorts as an empty row.
 	local EMPTY_ROW : WaitingRow = { name = "", lineName = "", waiting = 0 }
 	local function rowOf(rowKey : integer) : WaitingRow
@@ -736,9 +749,12 @@ local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeN
 				weight = 6,
 			},
 		},
-		rowKeys = rowKeys,
+		rowKeys = data.rowKeys,
 		userParam = data,
 		initialSortColumn = { 3, false },
+		fnUserFilter = function(rowKey : integer) : boolean
+			return data.rows[rowKey] ~= nil
+		end,
 	}
 end
 
@@ -750,7 +766,10 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		return nil
 	end)
 	local data = react.useStateLazy(function() : WaitingData
-		return { here = params.entityId, rows = {}, selectionState = selectionState, keys = {}, nextKey = 0 }
+		return {
+			here = params.entityId, rows = {}, selectionState = selectionState, keys = {}, nextKey = 0, rowKeys = {},
+			known = {},
+		}
 	end):old()
 	local current = state:old()
 
@@ -771,15 +790,15 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		for key in pairs(data.rows) do
 			data.rows[key] = nil
 		end
-		local rowKeys : {integer} = {}
-		for i, row in ipairs(tbl.rows) do
-			rowKeys[i] = waitingRowKey(data, row)
-			data.rows[rowKeys[i]] = row
+		for __, row in ipairs(tbl.rows) do
+			local key = waitingRowKey(data, row)
+			data.rows[key] = row
+			data.known[key] = row
 		end
-		if #rowKeys == 0 then
+		if #tbl.rows == 0 then
 			add(makeHint(_("Nobody is waiting here.")))
 		else
-			add(makeWaitingTable(rowKeys, data))
+			add(makeWaitingTable(data))
 		end
 	end
 	-- The arrow stays until the player turns it off, even if its destination drops out of the list for a moment.
