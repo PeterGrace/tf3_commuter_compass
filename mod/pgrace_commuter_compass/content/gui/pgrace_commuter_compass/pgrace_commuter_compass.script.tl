@@ -31,7 +31,6 @@ local WORK_ICON = "::/gui/entity_window/icons/building_industry.tga"
 local SHOP_ICON = "::/gui/entity_window/icons/symbol_shopping_cart.tga"
 local LINE_ICON = "::/gui/entity_window/icons/symbol_configure_line.tga"
 local ARROW_ICON = "::/gui/entity_window/icons/symbol_arrow_up.tga"
-local REFRESH_ICON = "::/gui/entity_window/icons/symbol_arrows_refresh.tga"
 local WAITING_ICON = "::/gui/entity_window/icons/symbol_person_multiple.tga"
 -- Line names in the Waiting table are shortened in the middle to this many characters (the tooltip has them whole).
 local LINE_NAME_MAX_CHARS = 14
@@ -548,33 +547,50 @@ end
 local record WaitingState
 	waitingTable : WaitingTable
 	failed : boolean
-	-- Bumped by every count, so each refresh gets fresh row keys (and therefore fresh cells with fresh userParam).
-	generation : integer
 end
 
--- Row keys stay unique across refreshes: generation * ROWS_PER_GENERATION + row index.
-local ROWS_PER_GENERATION = 100000
+-- The card recounts on this timer while the window is open (the base terminals view updates about as often).
+-- A count takes a few ms even at a busy hub.
+local WAITING_UPDATE_SECONDS = 1.0
+-- Row key of the Unknown row; real rows use their destination entity, so a destination keeps its row (and cells)
+-- across updates.
+local UNKNOWN_ROW_KEY = 0
 
-local function computeWaiting(stationGroup : Engine.Entity, generation : integer) : WaitingState
+-- Last error logged, so a persistent failure isn't logged on every update.
+local lastWaitingError : string = nil
+
+local function computeWaiting(stationGroup : Engine.Entity) : WaitingState
 	local ok, resultOrError = pcall(waiting.count, stationGroup)
 	if ok then
-		return { waitingTable = resultOrError as WaitingTable, failed = false, generation = generation }
+		lastWaitingError = nil
+		return { waitingTable = resultOrError as WaitingTable, failed = false }
 	end
-	debugPrint(LOG_PREFIX .. "waiting: error for station " .. tostring(stationGroup) .. ": " .. tostring(resultOrError))
-	return { waitingTable = nil, failed = true, generation = generation }
+	local message = tostring(resultOrError)
+	if message ~= lastWaitingError then
+		lastWaitingError = message
+		debugPrint(LOG_PREFIX .. "waiting: error for station " .. tostring(stationGroup) .. ": " .. message)
+	end
+	return { waitingTable = nil, failed = true }
 end
 
+local function waitingRowKey(row : WaitingRow) : integer
+	return row.destination or UNKNOWN_ROW_KEY
+end
+
+-- One object for the card's lifetime, handed to the table as `userParam`. Cells keep their first userParam, so
+-- every update refills `rows` in place and the cells poll it.
 local record WaitingData
 	here : Engine.Entity
 	rows : {integer : WaitingRow}
 	selectionState : ReactStateT<Selection>
 end
 
-local function waitingFlow(data : WaitingData, row : WaitingRow) : Selection
-	return { from = data.here, to = row.destination, animated = true }
+local function waitingFlow(data : WaitingData, destination : Engine.Entity) : Selection
+	return { from = data.here, to = destination, animated = true }
 end
 
 -- Locate, arrow toggle, and the name (opens the destination's window). The Unknown row is plain text.
+-- A row key always means the same destination, so only the selection needs polling here.
 local WaitingNameCell = react.RegisterRecipe("PgraceCommuterCompassWaitingNameCell", function(params : Builtin.TableCellParam) : TreeNodeId
 	local data = params.userParam as WaitingData
 	local row = data.rows[params.rowKey]
@@ -584,7 +600,7 @@ local WaitingNameCell = react.RegisterRecipe("PgraceCommuterCompassWaitingNameCe
 	if row.destination == nil then
 		return builtin.BoxLayout{ children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = row.name } } }
 	end
-	local flow = waitingFlow(data, row)
+	local flow = waitingFlow(data, row.destination)
 	local function selected() : boolean
 		local current = data.selectionState:old()
 		return current ~= nil and current.from == flow.from and current.to == flow.to
@@ -611,12 +627,17 @@ local WaitingNameCell = react.RegisterRecipe("PgraceCommuterCompassWaitingNameCe
 	}
 end)
 
+-- A text cell that follows its row's latest numbers.
 local function waitingText(name : string, textOf : function(WaitingRow) : string) : Recipe<Builtin.TableCellParam>
 	return react.RegisterRecipe(name, function(params : Builtin.TableCellParam) : TreeNodeId
-		local row = (params.userParam as WaitingData).rows[params.rowKey]
+		local data = params.userParam as WaitingData
+		local textState = engine_react_util.useStepState(function() : string
+			local row = data.rows[params.rowKey]
+			return row ~= nil and textOf(row) or ""
+		end)
 		-- A recipe must return a layout; a bare TextView crashes the whole UI.
 		return builtin.BoxLayout{
-			children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = row ~= nil and textOf(row) or "" } },
+			children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = textState:old() } },
 		}
 	end)
 end
@@ -628,29 +649,47 @@ local WaitingCountCell = waitingText("PgraceCommuterCompassWaitingCountCell", fu
 	return tostring(row.waiting)
 end)
 
--- The top line's name opens the line window; the tooltip lists every line with its count.
-local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCell", function(params : Builtin.TableCellParam) : TreeNodeId
-	local row = (params.userParam as WaitingData).rows[params.rowKey]
+local record LineCellState
+	label : string
+	tooltip : string
+	line : Engine.Entity
+end
+
+local function lineCellState(row : WaitingRow) : LineCellState
 	if row == nil or #row.lines == 0 then
-		return builtin.BoxLayout{ children = {} }
+		return { label = "", tooltip = "", line = nil }
 	end
 	local tooltip : {string} = {}
 	for _, line in ipairs(row.lines) do
 		tooltip[#tooltip + 1] = line.name .. ": " .. tostring(line.count)
 	end
+	return { label = rank.formatLineLabel(row, LINE_NAME_MAX_CHARS), tooltip = table.concat(tooltip, "\n"), line = row.lines[1].line }
+end
+
+-- The top line's name opens the line window; the tooltip lists every line with its count.
+local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCell", function(params : Builtin.TableCellParam) : TreeNodeId
+	local data = params.userParam as WaitingData
+	local cellState = engine_react_util.useStepState(function() : LineCellState
+		return lineCellState(data.rows[params.rowKey])
+	end)
+	local current = cellState:old()
+	if current.line == nil then
+		return builtin.BoxLayout{ children = {} }
+	end
 	-- The tooltip goes on the button itself; on a BoxLayout it never showed.
 	return builtin.BoxLayout{
 		children = {
-			line_react_util.makeEntityWindowButton(rank.formatLineLabel(row, LINE_NAME_MAX_CHARS), row.lines[1].line,
-				nil, nil, nil, nil, table.concat(tooltip, "\n")),
+			line_react_util.makeEntityWindowButton(current.label, current.line, nil, nil, nil, nil, current.tooltip),
 		},
 	}
 end)
 
 -- Starts sorted by Waiting (column 3), largest first.
 local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeNodeId
+	-- Rows are refilled on every update; a key the table still holds from before sorts as an empty row.
+	local EMPTY_ROW : WaitingRow = { name = "", waiting = 0, lines = {} }
 	local function rowOf(rowKey : integer) : WaitingRow
-		return data.rows[rowKey]
+		return data.rows[rowKey] or EMPTY_ROW
 	end
 	return builtin.DataTable{
 		columns = {
@@ -697,71 +736,46 @@ local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeN
 end
 
 local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", function(params : ListParams) : TreeNodeId
-	local state = react.useStateLazy(function() : WaitingState
-		return computeWaiting(params.entityId, 1)
-	end)
+	local state = engine_react_util.useStepStateTimer(function() : WaitingState
+		return computeWaiting(params.entityId)
+	end, WAITING_UPDATE_SECONDS)
 	local selectionState = react.useStateLazy(function() : Selection
 		return nil
 	end)
+	local data = react.useStateLazy(function() : WaitingData
+		return { here = params.entityId, rows = {}, selectionState = selectionState }
+	end):old()
 	local current = state:old()
-
-	local function refresh()
-		local next = computeWaiting(params.entityId, current.generation + 1)
-		-- Keep the arrow only while its destination is still listed.
-		local selection = selectionState:old()
-		if selection ~= nil then
-			local stillListed = false
-			for _, row in ipairs(next.waitingTable ~= nil and next.waitingTable.rows or {}) do
-				if row.destination == selection.to then
-					stillListed = true
-				end
-			end
-			if not stillListed then
-				selectionState:set(nil)
-			end
-		end
-		state:set(next)
-	end
 
 	local children : {TreeNodeId} = {}
 	local function add(node : TreeNodeId)
 		children[#children + 1] = node
 	end
 
-	local title : string
 	if current.failed then
-		title = _("Commuter Compass: error (see log)")
+		add(makeHint(_("Commuter Compass: error (see log)")))
 	else
-		title = _("Waiting") .. " · " .. plural(current.waitingTable.totalWaiting, _("person"), _("people"))
-			.. " · " .. plural(current.waitingTable.destinationCount, _("destination"), _("destinations"))
-	end
-	add(builtin.BoxLayout{
-		orientation = builtin.type.Orientation.Horizontal,
-		children = {
-			builtin.TextView{ text = title },
-			builtin.Button{
-				meta = { tooltip = _("Refresh") },
-				content = builtin.ImageView{ path = REFRESH_ICON, scaling = builtin.type.ImageViewScaling.AutoFit },
-				onClick = refresh,
-			},
-		},
-	})
-
-	if not current.failed then
 		local tbl = current.waitingTable
-		if #tbl.rows == 0 then
+		add(builtin.TextView{
+			text = _("Waiting") .. " · " .. plural(tbl.totalWaiting, _("person"), _("people"))
+				.. " · " .. plural(tbl.destinationCount, _("destination"), _("destinations")),
+		})
+		-- Refill in place: cells read rows from this same object.
+		for key in pairs(data.rows) do
+			data.rows[key] = nil
+		end
+		local rowKeys : {integer} = {}
+		for i, row in ipairs(tbl.rows) do
+			rowKeys[i] = waitingRowKey(row)
+			data.rows[rowKeys[i]] = row
+		end
+		if #rowKeys == 0 then
 			add(makeHint(_("Nobody is waiting here.")))
 		else
-			local data : WaitingData = { here = params.entityId, rows = {}, selectionState = selectionState }
-			local rowKeys : {integer} = {}
-			for i, row in ipairs(tbl.rows) do
-				local rowKey = current.generation * ROWS_PER_GENERATION + i
-				rowKeys[i] = rowKey
-				data.rows[rowKey] = row
-			end
 			add(makeWaitingTable(rowKeys, data))
 		end
 	end
+	-- The arrow stays until the player turns it off, even if its destination drops out of the list for a moment.
 	if selectionState:old() ~= nil then
 		add(FlowAction{ gameCtx = params.gameCtx, selection = selectionState:old() })
 	end

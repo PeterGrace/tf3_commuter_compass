@@ -20,13 +20,13 @@ rev 2.
 | Which mod | Inside **Commuter Compass**, as a second card. It reuses the table, formatting, arrow and camera code. |
 | Destinations that aren't towns | **Industries get their own rows.** Targets that can't be placed are counted as "Unknown". |
 | Several lines per destination | **The biggest line, plus "+N"** for the others. The tooltip has the full split. |
-| Refresh | **Snapshot** when the window opens, plus a **Refresh** button. No live updates. |
+| Refresh | **Live:** recounted every second while the window is open, like the base terminals view. This changed after the spike; it was "snapshot plus a Refresh button". |
 
 ## Card layout
 
 ```
 Waiting passengers
- Waiting · 1,240 people · 9 destinations       [⟳ Refresh]
+ Waiting · 1,240 people · 9 destinations
  ┌──────────────────────────────────────────────────────────┐
  │ Destination            Distance  Waiting  Line           │
  │ ⌖ ↗ Country Club        6.1 km     612    Red Line +1    │
@@ -47,8 +47,12 @@ Waiting passengers
   - **Line:** the line with the most people for this destination, plus " +N" when N other lines also carry people for
     it. Clicking the line name opens the line window. The tooltip lists every line with its count, largest first.
 - **Sorting:** starts sorted by Waiting, descending. Headers re-sort.
-- **Header:** "Waiting · N people · M destinations", and a **Refresh** button that recounts in place. If the selected
-  arrow's destination is still listed after a refresh, the arrow stays.
+- **Header:** "Waiting · N people · M destinations". The card recounts every second
+  (`engine_react_util.useStepStateTimer`) and re-renders only when the result changes.
+  - **Stable rows:** each row is keyed by its destination entity (the Unknown row by 0), so a destination keeps its
+    row and cells across updates.
+  - **Live cells:** the cells poll the card's shared row map, which is refilled in place on every update.
+  - **The arrow** stays until the player turns it off.
 - **Special states:**
   - An empty station shows "Nobody is waiting here."
   - A failed count shows "error (see log)".
@@ -103,9 +107,9 @@ Waiting passengers
 
 - **The card:** `StationPlugin` and `hasPassengerLines`, registered by a new `station_plugin.res.lua` (order 45).
 - **State:**
-  - `useState` holds a refresh counter;
-  - the data is computed when the counter changes, inside a `pcall`, and logs the gather time;
-  - the selected arrow is kept by destination, so it survives a refresh.
+  - `useStepStateTimer` recounts every second, inside a `pcall`, and logs an error only when it changes;
+  - one `WaitingData` object holds the rows and the selection for the card's lifetime;
+  - the selected arrow is kept by destination.
 - **Cells:** reuse the town card's cell helpers where the shapes match. Each cell recipe returns a BoxLayout.
 
 ## Error handling
@@ -138,7 +142,7 @@ Country Club Station, a busy bus hub with 9 player line stops and 246–313 peop
 - **Counts:** the people read always equalled `getLineStopSimEntitiesCount` summed over the line stops (3/3, 313/313,
   276/276, 246/246). The waiting hall needs no separate handling.
 - **Timing:** 0.2–16 ms per count (16 ms on the first count of a session, then 1–3 ms). Live updates would be
-  affordable, but the snapshot plus Refresh stays.
+  affordable, so after the spike the card switched from Refresh to updating every second.
 - **Layout:** an unweighted column takes its widest content. Long line names squeezed Destination to nothing, and its
   buttons were drawn under Distance. The fix:
   - Destination and Line share the spare width at 7:6;
@@ -157,10 +161,11 @@ Country Club Station, a busy bus hub with 9 player line stops and 246–313 peop
   - an empty input.
 - **In-game checklist:**
   - [ ] A passenger station shows the **Waiting passengers** card, expanded. A cargo-only station doesn't.
-  - [ ] The total roughly matches the base window's waiting counts (the snapshot can lag slightly).
+  - [ ] The total roughly matches the base window's waiting counts (it lags by up to a second).
   - [ ] Destination names open their windows, line names open the line, and Locate moves the camera.
   - [ ] The line tooltip lists every line, and its counts add up to the row's Waiting.
-  - [ ] Refresh updates the numbers and keeps the selected arrow.
+  - [ ] The numbers update by themselves about once a second, without flicker. The line tooltip stays open while
+    hovering, and the arrow stays.
   - [ ] Arrows go from the station to the destination, switch on the first click, and stay clear of the window.
   - [ ] The town card still works as before.
 
@@ -172,7 +177,6 @@ Country Club Station, a busy bus hub with 9 player line stops and 246–313 peop
 
 ## Out of scope
 
-- Live updating.
 - A per-stop breakdown (the vanilla tooltip has it).
 - Cargo waiting at stations.
 - Travel times and routes.
