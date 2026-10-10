@@ -676,6 +676,9 @@ local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeN
 				getCompareValue = function(rowKey : integer) : any
 					return rank.formatLineLabel(rowOf(rowKey))
 				end,
+				-- Without a weight the column takes its widest content; long line names ("Bus Passengers-CouClu-LO-1 +1")
+				-- then squeezed Destination to nothing and its buttons were drawn under Distance.
+				weight = 1,
 			},
 		},
 		rowKeys = rowKeys,
