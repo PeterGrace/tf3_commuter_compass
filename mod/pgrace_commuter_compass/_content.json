@@ -1,6 +1,7 @@
 {
     "archives": null,
     "files": [
+        "gui/pgrace_commuter_compass/arrow_label.css.lua",
         "gui/pgrace_commuter_compass/commuters.d.tl",
         "gui/pgrace_commuter_compass/commuters.tl",
         "gui/pgrace_commuter_compass/pgrace_commuter_compass.script.tl",

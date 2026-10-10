@@ -6,6 +6,8 @@ local selector_react_util = ug_require "::/gui/main/selector_react_util.tl" as S
 local color_util = ug_require "::/gui/main/color_util.tl" as ColorUtil
 local engine_react_util = ug_require "::/gui/main/engine_react_util.tl" as EngineReactUtil
 local town_eow = ug_require "::/gui/entity_window/town/town_eow.script.tl" as TownEow
+local callout_react_util = ug_require "::/gui/main/callout_react_util.tl" as CalloutReactUtil
+local styleutil = ug_require "::/gui/main/styleutil.tl" as StyleUtil
 local station_group_eow = ug_require "::/gui/entity_window/station_group/station_group_eow.script.tl" as StationGroupEow
 local commuters = ug_require "pgrace_commuter_compass::/gui/pgrace_commuter_compass/commuters.tl" as PgraceCommuterCompassCommuters
 local rank = ug_require "pgrace_commuter_compass::/gui/pgrace_commuter_compass/rank.tl" as PgraceCommuterCompassRank
@@ -25,6 +27,9 @@ local CAMERA_MAX_DISTANCE = 4000
 -- How far to move the view toward screen-right, as a fraction of the camera distance, so the arrow is centred
 -- in the map area left of the entity window (about the right quarter of a 16:9 screen).
 local CAMERA_WINDOW_SHIFT = 0.27
+-- The cargo-flow arrow is drawn as an arc this high (as a share of its length); the distance label sits on its top.
+-- Measured by eye; it matched both short and long arrows.
+local ARROW_ARC_HEIGHT = 0.06
 
 -- The base town window's Destinations table icons (gui/entity_window/town/town.tl).
 local WORK_ICON = "::/gui/entity_window/icons/building_industry.tga"
@@ -116,6 +121,77 @@ local function makeFlowLayerConfig(from : Vec3f, to : Vec3f, animated : boolean)
 	return layerConfig
 end
 
+local record ArrowLabelParams is IRecipeParamWithMeta
+	text : string
+end
+
+local ArrowLabel = react.RegisterRecipe("PgraceCommuterCompassArrowLabel", function(params : ArrowLabelParams) : TreeNodeId
+	return builtin.BoxLayout{
+		children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = params.text } },
+	}
+end)
+
+local record ArrowLabelLayerParams
+	from : Vec3f
+	to : Vec3f
+	text : string
+end
+
+-- The arrow's distance, drawn at the top of its arc. A full-screen layer of the arrow's own map action (as the town
+-- window draws its layer legend), so it comes and goes with the arrow and other popups can't displace it.
+local ArrowLabelLayer = react.RegisterRecipe("PgraceCommuterCompassArrowLabelLayer", function(params : ArrowLabelLayerParams) : TreeNodeId
+	react.setMouseTransparent(true)
+	react.setDisableFocusable(true)
+	local a, b = params.from, params.to
+	local lift = ARROW_ARC_HEIGHT * rank.planarDistance(a.x, a.y, b.x, b.y)
+	local top = api.type.Vec3f.new(0.5 * (a.x + b.x), 0.5 * (a.y + b.y), 0.5 * (a.z + b.z) + lift)
+	-- Where the label goes, in fractions of the screen; nil while unknown or behind the camera.
+	local positionState : ReactStateT<Vec2f> = react.useState(nil)
+	react.onStep(function()
+		-- world2Screen is restricted during the react step ("API is currently restricted"), so it runs in a join on
+		-- the main thread, as the base mission task list does with api.gui.byId.
+		react.enqueueJoin(function()
+			local ok, point = pcall(api.gui.camera.world2Screen, top)
+			local sizeOk, size = pcall(api.gui.camera.getSize)
+			if not ok or not sizeOk or point == nil or size == nil then
+				return
+			end
+			local pixel, viewport = point as Vec2i, size as Vec2i
+			if viewport.x <= 0 or viewport.y <= 0 then
+				return
+			end
+			-- world2Screen gives viewport pixels; the floating layout places things in fractions of the screen.
+			local h, v = pixel.x / viewport.x, pixel.y / viewport.y
+			local old = positionState:old()
+			if old == nil or old.x ~= h or old.y ~= v then
+				positionState:set(api.type.Vec2f.new(h, v))
+			end
+		end, "PgraceCommuterCompassArrowLabelLayer")
+	end)
+	local position = positionState:old()
+	if position == nil or position.x < 0 or position.x > 1 or position.y < 0 or position.y > 1 then
+		return builtin.FloatingLayout{ children = {} }
+	end
+	-- arrow_label.css.lua makes this floating layout fill the screen (gravity -1, -1), as the game's stylesheet does
+	-- for the callout container; then h and v place the label anywhere on it.
+	return builtin.FloatingLayout{
+		children = {
+			builtin.FloatingLayoutChild{
+				h = position.x,
+				v = position.y,
+				-- Keeps the label on screen near the edges, as the callout container does. (The tealdef types this field
+				-- as boolean, but the game passes the enum.)
+				overflowMode = builtin.type.FloatingLayoutOverflowMode.KeepInside as any as boolean,
+				item = callout_react_util.DefaultCalloutWrapper{
+					meta = { styleSheet = styleutil.makeStyle{ anchorPoint = api.type.Vec2f.new(0.5, 0.5) } },
+					recipe = ArrowLabel,
+					recipeParam = { text = params.text } as ArrowLabelParams,
+				},
+			},
+		},
+	}
+end)
+
 -- Moves the camera's look-at point toward screen-right, so the midpoint lands in the middle of the map area
 -- left of the entity window. Screen-right comes from the camera's eye and centre; world2Screen confirms the sign.
 local function shiftClearOfWindow(midpoint : Vec3f, distance : number) : Vec3f
@@ -160,7 +236,14 @@ local FlowAction = react.RegisterRecipe("PgraceCommuterCompassFlowAction", funct
 		local to = waiting.positionOf(selection.to)
 		local action : function() : TreeNodeId = nil
 		if from ~= nil and to ~= nil then
-			action = selector_react_util.makeDefaultSelectorAction(params.gameCtx, makeFlowLayerConfig(from, to, selection.animated))
+			local distance = rank.planarDistance(from.x, from.y, to.x, to.y)
+			action = selector_react_util.makeDefaultSelectorAction(params.gameCtx, makeFlowLayerConfig(from, to, selection.animated),
+				nil, function() : TreeNodeId
+					return builtin.FullScreenComponent{
+						recipe = ArrowLabelLayer,
+						param = { from = from, to = to, text = rank.formatDistance(distance) } as ArrowLabelLayerParams,
+					}
+				end)
 			frameCamera(from, to)
 		else
 			debugPrint(LOG_PREFIX .. "flow: no position for " .. key)
