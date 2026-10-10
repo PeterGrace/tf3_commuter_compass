@@ -6,8 +6,10 @@ local selector_react_util = ug_require "::/gui/main/selector_react_util.tl" as S
 local color_util = ug_require "::/gui/main/color_util.tl" as ColorUtil
 local engine_react_util = ug_require "::/gui/main/engine_react_util.tl" as EngineReactUtil
 local town_eow = ug_require "::/gui/entity_window/town/town_eow.script.tl" as TownEow
+local station_group_eow = ug_require "::/gui/entity_window/station_group/station_group_eow.script.tl" as StationGroupEow
 local commuters = ug_require "pgrace_commuter_compass::/gui/pgrace_commuter_compass/commuters.tl" as PgraceCommuterCompassCommuters
 local rank = ug_require "pgrace_commuter_compass::/gui/pgrace_commuter_compass/rank.tl" as PgraceCommuterCompassRank
+local waiting = ug_require "pgrace_commuter_compass::/gui/pgrace_commuter_compass/waiting.tl" as PgraceCommuterCompassWaiting
 
 local layerColors = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/layers/layer_colors.gres")).data as LayerColors
 local transparency = api.gui.genericRep.get(api.gui.genericRep.find("::/gui/main/transparency.gres")).data as GResTransparency
@@ -29,10 +31,13 @@ local WORK_ICON = "::/gui/entity_window/icons/building_industry.tga"
 local SHOP_ICON = "::/gui/entity_window/icons/symbol_shopping_cart.tga"
 local LINE_ICON = "::/gui/entity_window/icons/symbol_configure_line.tga"
 local ARROW_ICON = "::/gui/entity_window/icons/symbol_arrow_up.tga"
+local REFRESH_ICON = "::/gui/entity_window/icons/symbol_arrows_refresh.tga"
 
 local type Row = PgraceCommuterCompassRank.Row
 local type Section = PgraceCommuterCompassRank.Section
 local type Sections = PgraceCommuterCompassRank.Sections
+local type WaitingRow = PgraceCommuterCompassRank.WaitingRow
+local type WaitingTable = PgraceCommuterCompassRank.WaitingTable
 
 local record ListParams
 	entityId : Engine.Entity
@@ -145,8 +150,8 @@ local FlowAction = react.RegisterRecipe("PgraceCommuterCompassFlowAction", funct
 	local cacheRef : ReactRefT<FlowCache> = react.useRef(nil)
 	local changed = cacheRef:get() == nil or cacheRef:get().key ~= key
 	if changed then
-		local from = commuters.getPosition3(selection.from)
-		local to = commuters.getPosition3(selection.to)
+		local from = waiting.positionOf(selection.from)
+		local to = waiting.positionOf(selection.to)
 		local action : function() : TreeNodeId = nil
 		if from ~= nil and to ~= nil then
 			action = selector_react_util.makeDefaultSelectorAction(params.gameCtx, makeFlowLayerConfig(from, to, selection.animated))
@@ -533,9 +538,247 @@ local function hasOtherTowns(_params : TownEow.TownWidgetPluginParams) : boolean
 	return not ok or (countOrError as integer) > 1
 end
 
+-- ---------------------------------------------------------------------------------------------------------------
+-- Station window: Waiting passengers
+-- ---------------------------------------------------------------------------------------------------------------
+
+local record WaitingState
+	waitingTable : WaitingTable
+	failed : boolean
+	-- Bumped by every count, so each refresh gets fresh row keys (and therefore fresh cells with fresh userParam).
+	generation : integer
+end
+
+-- Row keys stay unique across refreshes: generation * ROWS_PER_GENERATION + row index.
+local ROWS_PER_GENERATION = 100000
+
+local function computeWaiting(stationGroup : Engine.Entity, generation : integer) : WaitingState
+	local ok, resultOrError = pcall(waiting.count, stationGroup)
+	if ok then
+		return { waitingTable = resultOrError as WaitingTable, failed = false, generation = generation }
+	end
+	debugPrint(LOG_PREFIX .. "waiting: error for station " .. tostring(stationGroup) .. ": " .. tostring(resultOrError))
+	return { waitingTable = nil, failed = true, generation = generation }
+end
+
+local record WaitingData
+	here : Engine.Entity
+	rows : {integer : WaitingRow}
+	selectionState : ReactStateT<Selection>
+end
+
+local function waitingFlow(data : WaitingData, row : WaitingRow) : Selection
+	return { from = data.here, to = row.destination, animated = true }
+end
+
+-- Locate, arrow toggle, and the name (opens the destination's window). The Unknown row is plain text.
+local WaitingNameCell = react.RegisterRecipe("PgraceCommuterCompassWaitingNameCell", function(params : Builtin.TableCellParam) : TreeNodeId
+	local data = params.userParam as WaitingData
+	local row = data.rows[params.rowKey]
+	if row == nil then
+		return builtin.BoxLayout{ children = {} }
+	end
+	if row.destination == nil then
+		return builtin.BoxLayout{ children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = row.name } } }
+	end
+	local flow = waitingFlow(data, row)
+	local function selected() : boolean
+		local current = data.selectionState:old()
+		return current ~= nil and current.from == flow.from and current.to == flow.to
+	end
+	local selectedState = engine_react_util.useStepState(selected)
+	return builtin.BoxLayout{
+		orientation = builtin.type.Orientation.Horizontal,
+		children = {
+			line_react_util.LocateButton{ entity = row.destination },
+			builtin.ToggleButton{
+				meta = { tooltip = _("Show on the map") },
+				content = builtin.ImageView{ path = ARROW_ICON, scaling = builtin.type.ImageViewScaling.AutoFit },
+				value = selectedState:old() and 1 or 0,
+				onValueChange = function(value : integer)
+					if value == 1 then
+						data.selectionState:set(flow)
+					elseif selected() then
+						data.selectionState:set(nil)
+					end
+				end,
+			},
+			line_react_util.makeEntityWindowButton(row.name, row.destination),
+		},
+	}
+end)
+
+local function waitingText(name : string, textOf : function(WaitingRow) : string) : Recipe<Builtin.TableCellParam>
+	return react.RegisterRecipe(name, function(params : Builtin.TableCellParam) : TreeNodeId
+		local row = (params.userParam as WaitingData).rows[params.rowKey]
+		-- A recipe must return a layout; a bare TextView crashes the whole UI.
+		return builtin.BoxLayout{
+			children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = row ~= nil and textOf(row) or "" } },
+		}
+	end)
+end
+
+local WaitingDistanceCell = waitingText("PgraceCommuterCompassWaitingDistanceCell", function(row : WaitingRow) : string
+	return row.distance ~= nil and rank.formatDistance(row.distance) or "-"
+end)
+local WaitingCountCell = waitingText("PgraceCommuterCompassWaitingCountCell", function(row : WaitingRow) : string
+	return tostring(row.waiting)
+end)
+
+-- The top line's name opens the line window; the tooltip lists every line with its count.
+local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCell", function(params : Builtin.TableCellParam) : TreeNodeId
+	local row = (params.userParam as WaitingData).rows[params.rowKey]
+	if row == nil or #row.lines == 0 then
+		return builtin.BoxLayout{ children = {} }
+	end
+	local tooltip : {string} = {}
+	for _, line in ipairs(row.lines) do
+		tooltip[#tooltip + 1] = line.name .. ": " .. tostring(line.count)
+	end
+	return builtin.BoxLayout{
+		meta = { tooltip = table.concat(tooltip, "\n") },
+		children = { line_react_util.makeEntityWindowButton(rank.formatLineLabel(row), row.lines[1].line) },
+	}
+end)
+
+-- Starts sorted by Waiting (column 3), largest first.
+local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeNodeId
+	local function rowOf(rowKey : integer) : WaitingRow
+		return data.rows[rowKey]
+	end
+	return builtin.DataTable{
+		columns = {
+			builtin.ColumnDesc{
+				name = _("Destination"),
+				recipe = WaitingNameCell,
+				getCompareValue = function(rowKey : integer) : any
+					return rowOf(rowKey).name
+				end,
+				weight = 1,
+			},
+			builtin.ColumnDesc{
+				name = _("Distance"),
+				recipe = WaitingDistanceCell,
+				getCompareValue = function(rowKey : integer) : any
+					return rowOf(rowKey).distance or math.huge
+				end,
+			},
+			builtin.ColumnDesc{
+				name = _("Waiting"),
+				recipe = WaitingCountCell,
+				getCompareValue = function(rowKey : integer) : any
+					return rowOf(rowKey).waiting
+				end,
+			},
+			builtin.ColumnDesc{
+				name = _("Line"),
+				recipe = WaitingLineCell,
+				getCompareValue = function(rowKey : integer) : any
+					return rank.formatLineLabel(rowOf(rowKey))
+				end,
+			},
+		},
+		rowKeys = rowKeys,
+		userParam = data,
+		initialSortColumn = { 3, false },
+	}
+end
+
+local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", function(params : ListParams) : TreeNodeId
+	local state = react.useStateLazy(function() : WaitingState
+		return computeWaiting(params.entityId, 1)
+	end)
+	local selectionState = react.useStateLazy(function() : Selection
+		return nil
+	end)
+	local current = state:old()
+
+	local function refresh()
+		local next = computeWaiting(params.entityId, current.generation + 1)
+		-- Keep the arrow only while its destination is still listed.
+		local selection = selectionState:old()
+		if selection ~= nil then
+			local stillListed = false
+			for _, row in ipairs(next.waitingTable ~= nil and next.waitingTable.rows or {}) do
+				if row.destination == selection.to then
+					stillListed = true
+				end
+			end
+			if not stillListed then
+				selectionState:set(nil)
+			end
+		end
+		state:set(next)
+	end
+
+	local children : {TreeNodeId} = {}
+	local function add(node : TreeNodeId)
+		children[#children + 1] = node
+	end
+
+	local title : string
+	if current.failed then
+		title = _("Commuter Compass: error (see log)")
+	else
+		title = _("Waiting") .. " · " .. plural(current.waitingTable.totalWaiting, _("person"), _("people"))
+			.. " · " .. plural(current.waitingTable.destinationCount, _("destination"), _("destinations"))
+	end
+	add(builtin.BoxLayout{
+		orientation = builtin.type.Orientation.Horizontal,
+		children = {
+			builtin.TextView{ text = title },
+			builtin.Button{
+				meta = { tooltip = _("Refresh") },
+				content = builtin.ImageView{ path = REFRESH_ICON, scaling = builtin.type.ImageViewScaling.AutoFit },
+				onClick = refresh,
+			},
+		},
+	})
+
+	if not current.failed then
+		local tbl = current.waitingTable
+		if #tbl.rows == 0 then
+			add(makeHint(_("Nobody is waiting here.")))
+		else
+			local data : WaitingData = { here = params.entityId, rows = {}, selectionState = selectionState }
+			local rowKeys : {integer} = {}
+			for i, row in ipairs(tbl.rows) do
+				local rowKey = current.generation * ROWS_PER_GENERATION + i
+				rowKeys[i] = rowKey
+				data.rows[rowKey] = row
+			end
+			add(makeWaitingTable(rowKeys, data))
+		end
+	end
+	if selectionState:old() ~= nil then
+		add(FlowAction{ gameCtx = params.gameCtx, selection = selectionState:old() })
+	end
+	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = children }
+end)
+
+local StationPlugin = react.RegisterPluginRecipe(station_group_eow.StationGroupEowExtensionPoint, "PgraceCommuterCompassStationPlugin", function(params : StationGroupEow.StationGroupWidgetPluginParams) : TreeNodeId
+	return builtin.BoxLayout{
+		child = content_card.ContentCard{
+			title = _("Waiting passengers"),
+			initialCalloutTextPermanent = "",
+			recipeAndParamPermanent = content_card.makeRecipeAndParam(WaitingList, { entityId = params.entityId, gameCtx = params.gameCtx } as ListParams),
+			gameCtx = params.gameCtx,
+			showOnRightSide = params.showCalloutOnRightSide,
+		},
+	}
+end)
+
+-- Hides the card on cargo-only stations and stations none of the player's lines serve. Shows on error.
+local function hasPassengerLines(params : StationGroupEow.StationGroupWidgetPluginParams) : boolean
+	local ok, resultOrError = pcall(waiting.hasPassengerLines, params.entityId)
+	return not ok or resultOrError as boolean
+end
+
 debugPrint(LOG_PREFIX .. "script loaded")
 
 return {
 	TownPlugin = TownPlugin,
 	hasOtherTowns = hasOtherTowns,
+	StationPlugin = StationPlugin,
+	hasPassengerLines = hasPassengerLines,
 }
