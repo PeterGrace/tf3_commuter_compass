@@ -822,6 +822,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 	end)
 
 	local function onSort(column : integer, ascending : boolean)
+		debugPrint(LOG_PREFIX .. "probe sort: column " .. tostring(column) .. " ascending " .. tostring(ascending) .. " (was " .. tostring(data.sortColumn) .. " " .. tostring(data.sortAscending) .. ")") -- PROBE (remove before release)
 		if column == data.sortColumn and ascending == data.sortAscending then
 			return
 		end
@@ -843,6 +844,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		if data.scrollSteps == 0 and data.scrollToKey ~= nil then
 			local node = tableRef:get()
 			local tableApi = node and node:getApi()
+			debugPrint(LOG_PREFIX .. "probe scroll: key " .. tostring(data.scrollToKey) .. " node " .. tostring(node ~= nil) .. " api " .. tostring(tableApi ~= nil) .. " row " .. tostring(data.rows[data.scrollToKey] and data.rows[data.scrollToKey].name)) -- PROBE (remove before release)
 			if tableApi then
 				tableApi.scrollToRowKey(data.scrollToKey, false)
 			end
