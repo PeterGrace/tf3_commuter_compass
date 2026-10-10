@@ -140,3 +140,79 @@ t.test("buildSections: missing counts put every town in nearby", function()
 	t.eq(s.nearby.rows[1].lineUsage, nil)
 	t.eq(s.nearby.rows[1].work, 0)
 end)
+
+local function info()
+	return {
+		destinationName = { [10] = "Country Club", [11] = "Wenatchee", [12] = "Coal mine", [13] = "Abbey" },
+		destinationDistance = { [10] = 6100, [11] = 4400, [12] = 2900, [13] = 1000 },
+		lineName = { [1] = "Red Line", [2] = "Bus 4", [3] = "Bus 12" },
+		unknownName = "Unknown",
+	}
+end
+
+local function waiters(spec)
+	-- spec: { {line, destination, count}, ... }; destination false = unknown
+	local list = {}
+	for _, s in ipairs(spec) do
+		for _ = 1, s[3] do
+			list[#list + 1] = { line = s[1], destination = s[2] or nil }
+		end
+	end
+	return list
+end
+
+local function names(tbl)
+	local out = {}
+	for i, row in ipairs(tbl.rows) do
+		out[i] = row.name .. "=" .. row.waiting
+	end
+	return table.concat(out, ",")
+end
+
+t.test("groupWaiting: one row per destination, sorted by waiting then name", function()
+	local tbl = rank.groupWaiting(waiters({ { 1, 10, 5 }, { 3, 12, 2 }, { 1, 11, 2 }, { 2, 10, 1 } }), info())
+	t.eq(names(tbl), "Country Club=6,Coal mine=2,Wenatchee=2")
+	t.eq(tbl.totalWaiting, 10)
+	t.eq(tbl.destinationCount, 3)
+	t.eq(tbl.rows[1].distance, 6100)
+	t.eq(tbl.rows[1].destination, 10)
+end)
+
+t.test("groupWaiting: lines per row by count, ties by name, counts add up", function()
+	local tbl = rank.groupWaiting(waiters({ { 1, 10, 3 }, { 2, 10, 5 }, { 3, 10, 3 } }), info())
+	local row = tbl.rows[1]
+	t.eq(#row.lines, 3)
+	t.eq(row.lines[1].name, "Bus 4")
+	t.eq(row.lines[1].count, 5)
+	t.eq(row.lines[2].name, "Bus 12")
+	t.eq(row.lines[3].name, "Red Line")
+	t.eq(row.lines[1].count + row.lines[2].count + row.lines[3].count, row.waiting)
+end)
+
+t.test("groupWaiting: unknown destinations are one row, last, not a destination", function()
+	local tbl = rank.groupWaiting(waiters({ { 1, false, 9 }, { 1, 13, 1 } }), info())
+	t.eq(names(tbl), "Abbey=1,Unknown=9")
+	t.eq(tbl.rows[2].destination, nil)
+	t.eq(tbl.rows[2].distance, nil)
+	t.eq(tbl.totalWaiting, 10)
+	t.eq(tbl.destinationCount, 1)
+end)
+
+t.test("groupWaiting: empty station", function()
+	local tbl = rank.groupWaiting({}, info())
+	t.eq(#tbl.rows, 0)
+	t.eq(tbl.totalWaiting, 0)
+	t.eq(tbl.destinationCount, 0)
+end)
+
+t.test("groupWaiting: missing names fall back to the entity id", function()
+	local tbl = rank.groupWaiting(waiters({ { 7, 99, 1 } }), info())
+	t.eq(tbl.rows[1].name, "99")
+	t.eq(tbl.rows[1].lines[1].name, "7")
+end)
+
+t.test("formatLineLabel: top line, plus the number of other lines", function()
+	t.eq(rank.formatLineLabel({ lines = {} }), "")
+	t.eq(rank.formatLineLabel({ lines = { { name = "Red Line", count = 5 } } }), "Red Line")
+	t.eq(rank.formatLineLabel({ lines = { { name = "Red Line", count = 5 }, { name = "Bus 4", count = 1 }, { name = "Bus 12", count = 1 } } }), "Red Line +2")
+end)

@@ -119,4 +119,80 @@ function rank.buildSections(towns : {TownData}, cap : integer, nearbyCount : int
 	}
 end
 
+local type Waiter = PgraceCommuterCompassRank.Waiter
+local type LineCount = PgraceCommuterCompassRank.LineCount
+local type WaitingRow = PgraceCommuterCompassRank.WaitingRow
+
+local function byCountThenName(a : LineCount, b : LineCount) : boolean
+	if a.count ~= b.count then
+		return a.count > b.count
+	end
+	return a.name < b.name
+end
+
+local function byWaitingThenName(a : WaitingRow, b : WaitingRow) : boolean
+	if a.waiting ~= b.waiting then
+		return a.waiting > b.waiting
+	end
+	return a.name < b.name
+end
+
+-- One row out of a {line: count} bucket.
+local function waitingRow(destination : Engine.Entity, name : string, distance : number, bucket : {Engine.Entity : integer},
+		lineName : {Engine.Entity : string}) : WaitingRow
+	local row : WaitingRow = { destination = destination, name = name, distance = distance, waiting = 0, lines = {} }
+	for line, count in pairs(bucket) do
+		row.lines[#row.lines + 1] = { line = line, name = lineName[line] or tostring(line), count = count }
+		row.waiting = row.waiting + count
+	end
+	table.sort(row.lines, byCountThenName)
+	return row
+end
+
+function rank.groupWaiting(waiters : {Waiter}, info : PgraceCommuterCompassRank.WaitingInfo) : PgraceCommuterCompassRank.WaitingTable
+	local buckets : {Engine.Entity : {Engine.Entity : integer}} = {}
+	local unknown : {Engine.Entity : integer} = nil
+	for _, waiter in ipairs(waiters) do
+		local bucket : {Engine.Entity : integer}
+		if waiter.destination == nil then
+			unknown = unknown or {}
+			bucket = unknown
+		else
+			bucket = buckets[waiter.destination]
+			if bucket == nil then
+				bucket = {}
+				buckets[waiter.destination] = bucket
+			end
+		end
+		bucket[waiter.line] = (bucket[waiter.line] or 0) + 1
+	end
+
+	local rows : {WaitingRow} = {}
+	for destination, bucket in pairs(buckets) do
+		local name = info.destinationName[destination] or tostring(destination)
+		rows[#rows + 1] = waitingRow(destination, name, info.destinationDistance[destination], bucket, info.lineName)
+	end
+	table.sort(rows, byWaitingThenName)
+	local destinationCount = #rows
+	if unknown ~= nil then
+		rows[#rows + 1] = waitingRow(nil, info.unknownName, nil, unknown, info.lineName)
+	end
+
+	local total = 0
+	for _, row in ipairs(rows) do
+		total = total + row.waiting
+	end
+	return { rows = rows, totalWaiting = total, destinationCount = destinationCount }
+end
+
+function rank.formatLineLabel(row : WaitingRow) : string
+	if #row.lines == 0 then
+		return ""
+	end
+	if #row.lines == 1 then
+		return row.lines[1].name
+	end
+	return row.lines[1].name .. " +" .. tostring(#row.lines - 1)
+end
+
 return rank

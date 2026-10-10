@@ -50,6 +50,48 @@ global record PgraceCommuterCompassRank
 		countsKnown : boolean
 	end
 
+	-- One person waiting at the station, as waiting.tl reads them.
+	record Waiter
+		-- The line the person is waiting for.
+		line : Engine.Entity
+		-- Their final destination (a town or an industry); nil when the target couldn't be placed.
+		destination : Engine.Entity
+	end
+
+	record LineCount
+		line : Engine.Entity
+		name : string
+		count : integer
+	end
+
+	record WaitingRow
+		-- nil for the "Unknown" row.
+		destination : Engine.Entity
+		name : string
+		-- Metres from the station; nil when unknown.
+		distance : number
+		waiting : integer
+		-- Every line with people for this destination, by count (largest first), ties by name.
+		lines : {LineCount}
+	end
+
+	record WaitingTable
+		-- By waiting (largest first), ties by name; the Unknown row, if any, last.
+		rows : {WaitingRow}
+		totalWaiting : integer
+		-- Rows except Unknown.
+		destinationCount : integer
+	end
+
+	-- Names and distances for groupWaiting, looked up by waiting.tl.
+	record WaitingInfo
+		destinationName : {Engine.Entity : string}
+		destinationDistance : {Engine.Entity : number}
+		lineName : {Engine.Entity : string}
+		-- Label of the row for waiters without a destination.
+		unknownName : string
+	end
+
 	-- Straight-line distance on the map plane.
 	planarDistance : function(ax : number, ay : number, bx : number, by : number) : number
 	-- linesUseCount / usageCount, or nil when counts are nil or usageCount is 0.
@@ -61,4 +103,8 @@ global record PgraceCommuterCompassRank
 	formatDistance : function(metres : number) : string
 	-- "45%"; "<1%" for small non-zero shares (so a rider is never shown as "0%"); "-" for nil (as the base table).
 	formatPercent : function(fraction : number) : string
+	-- Groups waiters per destination; see WaitingTable for the order.
+	groupWaiting : function(waiters : {Waiter}, info : WaitingInfo) : WaitingTable
+	-- "Red Line", or "Red Line +2" when two other lines carry people too; "" without lines.
+	formatLineLabel : function(row : WaitingRow) : string
 end
