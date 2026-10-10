@@ -32,6 +32,8 @@ local SHOP_ICON = "::/gui/entity_window/icons/symbol_shopping_cart.tga"
 local LINE_ICON = "::/gui/entity_window/icons/symbol_configure_line.tga"
 local ARROW_ICON = "::/gui/entity_window/icons/symbol_arrow_up.tga"
 local REFRESH_ICON = "::/gui/entity_window/icons/symbol_arrows_refresh.tga"
+-- Line names in the Waiting table are shortened in the middle to this many characters (the tooltip has them whole).
+local LINE_NAME_MAX_CHARS = 14
 
 local type Row = PgraceCommuterCompassRank.Row
 local type Section = PgraceCommuterCompassRank.Section
@@ -637,7 +639,7 @@ local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCe
 	end
 	return builtin.BoxLayout{
 		meta = { tooltip = table.concat(tooltip, "\n") },
-		children = { line_react_util.makeEntityWindowButton(rank.formatLineLabel(row), row.lines[1].line) },
+		children = { line_react_util.makeEntityWindowButton(rank.formatLineLabel(row, LINE_NAME_MAX_CHARS), row.lines[1].line) },
 	}
 end)
 
@@ -654,7 +656,8 @@ local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeN
 				getCompareValue = function(rowKey : integer) : any
 					return rowOf(rowKey).name
 				end,
-				weight = 1,
+				-- Two thirds of the spare width: town names are what the card is read for.
+				weight = 2,
 			},
 			builtin.ColumnDesc{
 				name = _("Distance"),

@@ -106,5 +106,9 @@ global record PgraceCommuterCompassRank
 	-- Groups waiters per destination; see WaitingTable for the order.
 	groupWaiting : function(waiters : {Waiter}, info : WaitingInfo) : WaitingTable
 	-- "Red Line", or "Red Line +2" when two other lines carry people too; "" without lines.
-	formatLineLabel : function(row : WaitingRow) : string
+	-- With `maxChars`, the top line's name is shortened by shortenMiddle.
+	formatLineLabel : function(row : WaitingRow, maxChars? : integer) : string
+	-- At most `maxChars` characters (UTF-8 aware): the start, "…", and a longer end, since names like
+	-- "Bus Passengers-CouClu-LO-1" differ at the end. Spaces next to the "…" are dropped.
+	shortenMiddle : function(text : string, maxChars : integer) : string
 end

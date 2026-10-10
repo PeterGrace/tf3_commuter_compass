@@ -185,14 +185,39 @@ function rank.groupWaiting(waiters : {Waiter}, info : PgraceCommuterCompassRank.
 	return { rows = rows, totalWaiting = total, destinationCount = destinationCount }
 end
 
-function rank.formatLineLabel(row : WaitingRow) : string
+-- UTF-8 characters of `text`, one string each.
+local function characters(text : string) : {string}
+	local result : {string} = {}
+	for char in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+		result[#result + 1] = char
+	end
+	return result
+end
+
+function rank.shortenMiddle(text : string, maxChars : integer) : string
+	local chars = characters(text)
+	if #chars <= maxChars then
+		return text
+	end
+	local headCount = math.floor((maxChars - 1) / 3)
+	local tailCount = maxChars - 1 - headCount
+	local head = table.concat(chars, "", 1, headCount):gsub("%s+$", "")
+	local tail = table.concat(chars, "", #chars - tailCount + 1, #chars):gsub("^%s+", "")
+	return head .. "…" .. tail
+end
+
+function rank.formatLineLabel(row : WaitingRow, maxChars? : integer) : string
 	if #row.lines == 0 then
 		return ""
 	end
-	if #row.lines == 1 then
-		return row.lines[1].name
+	local name = row.lines[1].name
+	if maxChars ~= nil then
+		name = rank.shortenMiddle(name, maxChars)
 	end
-	return row.lines[1].name .. " +" .. tostring(#row.lines - 1)
+	if #row.lines == 1 then
+		return name
+	end
+	return name .. " +" .. tostring(#row.lines - 1)
 end
 
 return rank

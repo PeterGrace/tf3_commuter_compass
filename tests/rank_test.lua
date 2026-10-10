@@ -216,3 +216,21 @@ t.test("formatLineLabel: top line, plus the number of other lines", function()
 	t.eq(rank.formatLineLabel({ lines = { { name = "Red Line", count = 5 } } }), "Red Line")
 	t.eq(rank.formatLineLabel({ lines = { { name = "Red Line", count = 5 }, { name = "Bus 4", count = 1 }, { name = "Bus 12", count = 1 } } }), "Red Line +2")
 end)
+
+t.test("shortenMiddle: short names stay whole, long ones keep start and end", function()
+	t.eq(rank.shortenMiddle("Bus 12", 14), "Bus 12")
+	t.eq(rank.shortenMiddle("Exactly 14 chr", 14), "Exactly 14 chr")
+	t.eq(rank.shortenMiddle("Bus Passengers-CouClu-LO-1", 14), "Bus…uClu-LO-1")
+	t.eq(rank.shortenMiddle("Bus Passengers-Sco-CouClu-IC-1", 14), "Bus…uClu-IC-1")
+end)
+
+t.test("shortenMiddle: counts characters, not bytes", function()
+	t.eq(rank.shortenMiddle("Zürich Hbf – Genève Cornavin", 14), "Züri…Cornavin")
+	t.eq(rank.shortenMiddle("Zürich", 6), "Zürich")
+end)
+
+t.test("formatLineLabel: shortens the top line's name when asked", function()
+	local row = { lines = { { name = "Bus Passengers-CouClu-LO-1", count = 5 }, { name = "Bus 4", count = 1 } } }
+	t.eq(rank.formatLineLabel(row), "Bus Passengers-CouClu-LO-1 +1")
+	t.eq(rank.formatLineLabel(row, 14), "Bus…uClu-LO-1 +1")
+end)
