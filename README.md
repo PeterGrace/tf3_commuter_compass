@@ -63,7 +63,8 @@ Restart TF3 after code changes. The log is
 ## In-game checklist
 
 - [ ] A town window shows the **Commuters** card after the charts, with every section collapsed.
-- [ ] Column headers sort the table; clicking again reverses the order.
+- [ ] Column headers sort the table; clicking again reverses the order. The window then scrolls to that section's
+  header instead of jumping mid-list.
 - [ ] The work and shop counts and line usage match the base Destinations table (Supplies tab).
 - [ ] Town B in A's Outbound lists A in its Inbound, with the same counts.
 - [ ] Nearby lists the 3 nearest towns with no commuters, with only Town and Distance columns.

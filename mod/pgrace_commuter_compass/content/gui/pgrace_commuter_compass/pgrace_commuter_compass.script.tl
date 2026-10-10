@@ -230,6 +230,11 @@ local record CardData
 	rows : {integer : Row}
 	directions : {integer : Direction}
 	selectionState : ReactStateT<Selection>
+	-- After a header click in a section's table: that section, and frames left until its header is scrolled into
+	-- view. A re-sorting table keeps its current row (the last row clicked, else the first) in view, which scrolls the
+	-- window to mid-list.
+	scrollSection : Direction
+	scrollSteps : integer
 end
 
 -- The arrow a row's toggle selects: passengers travel towards whoever they commute to.
@@ -373,6 +378,10 @@ local function makeTable(section : Section, direction : Direction, data : CardDa
 		rowKeys = rowKeys,
 		userParam = data,
 		initialSortColumn = { 2, true },
+		onSortColumnChange = function(_column : integer, _ascending : boolean)
+			data.scrollSection = direction
+			data.scrollSteps = 3
+		end,
 	}
 end
 
@@ -395,8 +404,8 @@ local function plural(count : integer, one : string, many : string) : string
 end
 
 -- Clickable header with the game's combobox arrows (as in collapsible_checkbox_list).
-local function makeSectionHeader(title : string, fold : Fold) : TreeNodeId
-	return builtin.Button{
+local function makeSectionHeader(title : string, fold : Fold, ref : RefFill) : TreeNodeId
+	return builtin.Button(ref, {
 		content = builtin.BoxLayout{
 			orientation = builtin.type.Orientation.Horizontal,
 			children = {
@@ -407,11 +416,11 @@ local function makeSectionHeader(title : string, fold : Fold) : TreeNodeId
 			},
 		},
 		onClick = fold.toggle,
-	}
+	})
 end
 
-local function makeSection(spec : SectionSpec, data : CardData, fold : Fold) : TreeNodeId
-	local header = makeSectionHeader(spec.title, fold)
+local function makeSection(spec : SectionSpec, data : CardData, fold : Fold, headerRef : RefFill) : TreeNodeId
+	local header = makeSectionHeader(spec.title, fold, headerRef)
 	if not fold.expanded then
 		return header
 	end
@@ -459,7 +468,9 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 	end
 	-- Every section's rows, registered once (also for collapsed sections), so cells always find theirs.
 	local cardData = react.useStateLazy(function() : CardData
-		local data : CardData = { here = params.entityId, rows = {}, directions = {}, selectionState = selectionState }
+		local data : CardData = {
+			here = params.entityId, rows = {}, directions = {}, selectionState = selectionState, scrollSteps = 0,
+		}
 		local sections = current.sections
 		if sections ~= nil then
 			local function register(section : Section, direction : Direction)
@@ -475,6 +486,26 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 		end
 		return data
 	end):old()
+	local headerRefs = {
+		Out = react.useNodeRef(builtin.Button),
+		In = react.useNodeRef(builtin.Button),
+		Nearby = react.useNodeRef(builtin.Button),
+	}
+	-- After a sort, scroll the window back up to that section's header, a few frames later so the table has re-sorted.
+	-- (The table's own scrollToRowKey only scrolls inside the table, not the window.)
+	react.onStep(function()
+		if cardData.scrollSteps <= 0 then
+			return
+		end
+		cardData.scrollSteps = cardData.scrollSteps - 1
+		if cardData.scrollSteps == 0 then
+			local headerRef = headerRefs[cardData.scrollSection]
+			local node = headerRef and headerRef:get()
+			if node ~= nil then
+				node:ensureVisible()
+			end
+		end
+	end)
 
 	local children : {TreeNodeId} = {}
 	local function add(node : TreeNodeId)
@@ -496,14 +527,14 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 					emptyText = _("No commuters leave this town."),
 					showCounts = true,
 					direction = "Out",
-				}, cardData, makeFold("out")))
+				}, cardData, makeFold("out"), react.ref(headerRefs.Out)))
 				add(makeSection({
 					title = tripTitle(_("Inbound"), sections.inbound),
 					section = sections.inbound,
 					emptyText = _("No commuters arrive from other towns."),
 					showCounts = true,
 					direction = "In",
-				}, cardData, makeFold("in")))
+				}, cardData, makeFold("in"), react.ref(headerRefs.In)))
 			else
 				add(makeHint(_("Commuter data unavailable")))
 			end
@@ -516,7 +547,7 @@ local CommuterList = react.RegisterRecipe("PgraceCommuterCompassList", function(
 					emptyText = "",
 					showCounts = false,
 					direction = "Nearby",
-				}, cardData, makeFold("nearby")))
+				}, cardData, makeFold("nearby"), react.ref(headerRefs.Nearby)))
 			end
 		end
 	end
