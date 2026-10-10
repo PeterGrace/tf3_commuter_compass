@@ -51,7 +51,7 @@ Waiting passengers
 - **Sorting:** starts sorted by Waiting, descending. Headers re-sort.
   - **The order is frozen between header clicks.** The numbers update live, but rows keep their place; a new row (or
     one back after being hidden) slots in by its numbers at that moment. A header click re-sorts on the current
-    numbers and scrolls the new first row into view (`scrollToRowKey`).
+    numbers, then scrolls the window back up to the header line (`ensureVisible` on its node; the table's `scrollToRowKey` only scrolls inside the table).
   - Why: the table keeps its current row (the last row clicked, else the first) in view whenever it re-sorts. Re-sorting
     on every update made the window chase that row up and down the list.
 - **Header:** "Waiting · N people · M destinations". The card recounts every 2 seconds
