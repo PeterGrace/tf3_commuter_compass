@@ -33,7 +33,8 @@ local LINE_ICON = "::/gui/entity_window/icons/symbol_configure_line.tga"
 local ARROW_ICON = "::/gui/entity_window/icons/symbol_arrow_up.tga"
 local WAITING_ICON = "::/gui/entity_window/icons/symbol_person_multiple.tga"
 -- Line names in the Waiting table are shortened in the middle to this many characters (the tooltip has them whole).
-local LINE_NAME_MAX_CHARS = 14
+-- 14 fit with a " +N" suffix; without one there's room for a few more.
+local LINE_NAME_MAX_CHARS = 17
 
 local type Row = PgraceCommuterCompassRank.Row
 local type Section = PgraceCommuterCompassRank.Section
@@ -52,6 +53,9 @@ local record Selection
 	to : Engine.Entity
 	-- Animated when some of these commuters ride the player's lines; faint and static otherwise.
 	animated : boolean
+	-- Waiting table only: the line of the row that set the arrow, so only that row's toggle lights up (a destination
+	-- has a row per line, and they all share one arrow).
+	via : Engine.Entity
 end
 
 local record FlowParams
@@ -552,9 +556,6 @@ end
 -- The card recounts on this timer while the window is open (the base terminals view updates about as often).
 -- A count takes a few ms even at a busy hub.
 local WAITING_UPDATE_SECONDS = 1.0
--- Row key of the Unknown row; real rows use their destination entity, so a destination keeps its row (and cells)
--- across updates.
-local UNKNOWN_ROW_KEY = 0
 
 -- Last error logged, so a persistent failure isn't logged on every update.
 local lastWaitingError : string = nil
@@ -573,24 +574,35 @@ local function computeWaiting(stationGroup : Engine.Entity) : WaitingState
 	return { waitingTable = nil, failed = true }
 end
 
-local function waitingRowKey(row : WaitingRow) : integer
-	return row.destination or UNKNOWN_ROW_KEY
-end
-
 -- One object for the card's lifetime, handed to the table as `userParam`. Cells keep their first userParam, so
 -- every update refills `rows` in place and the cells poll it.
 local record WaitingData
 	here : Engine.Entity
 	rows : {integer : WaitingRow}
 	selectionState : ReactStateT<Selection>
+	-- Row key per "destination:line", handed out once, so a destination and line keep their row (and cells) across
+	-- updates.
+	keys : {string : integer}
+	nextKey : integer
 end
 
-local function waitingFlow(data : WaitingData, destination : Engine.Entity) : Selection
-	return { from = data.here, to = destination, animated = true }
+local function waitingRowKey(data : WaitingData, row : WaitingRow) : integer
+	local id = tostring(row.destination or 0) .. ":" .. tostring(row.line)
+	local key = data.keys[id]
+	if key == nil then
+		data.nextKey = data.nextKey + 1
+		key = data.nextKey
+		data.keys[id] = key
+	end
+	return key
 end
 
--- Locate, arrow toggle, and the name (opens the destination's window). The Unknown row is plain text.
--- A row key always means the same destination, so only the selection needs polling here.
+local function waitingFlow(data : WaitingData, row : WaitingRow) : Selection
+	return { from = data.here, to = row.destination, animated = true, via = row.line }
+end
+
+-- Locate, arrow toggle, and the name (opens the destination's window). Unknown rows are plain text.
+-- A row key always means the same destination and line, so only the selection needs polling here.
 local WaitingNameCell = react.RegisterRecipe("PgraceCommuterCompassWaitingNameCell", function(params : Builtin.TableCellParam) : TreeNodeId
 	local data = params.userParam as WaitingData
 	local row = data.rows[params.rowKey]
@@ -600,10 +612,10 @@ local WaitingNameCell = react.RegisterRecipe("PgraceCommuterCompassWaitingNameCe
 	if row.destination == nil then
 		return builtin.BoxLayout{ children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = row.name } } }
 	end
-	local flow = waitingFlow(data, row.destination)
+	local flow = waitingFlow(data, row)
 	local function selected() : boolean
 		local current = data.selectionState:old()
-		return current ~= nil and current.from == flow.from and current.to == flow.to
+		return current ~= nil and current.from == flow.from and current.to == flow.to and current.via == flow.via
 	end
 	local selectedState = engine_react_util.useStepState(selected)
 	return builtin.BoxLayout{
@@ -651,32 +663,27 @@ end)
 
 local record LineCellState
 	label : string
+	-- The full name when the label is shortened.
 	tooltip : string
 	line : Engine.Entity
 end
 
-local function lineCellState(row : WaitingRow) : LineCellState
-	if row == nil or #row.lines == 0 then
-		return { label = "", tooltip = "", line = nil }
-	end
-	local tooltip : {string} = {}
-	for _, line in ipairs(row.lines) do
-		tooltip[#tooltip + 1] = line.name .. ": " .. tostring(line.count)
-	end
-	return { label = rank.formatLineLabel(row, LINE_NAME_MAX_CHARS), tooltip = table.concat(tooltip, "\n"), line = row.lines[1].line }
-end
-
--- The top line's name opens the line window; the tooltip lists every line with its count.
+-- The line's name, shortened in the middle when long; it opens the line window.
 local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCell", function(params : Builtin.TableCellParam) : TreeNodeId
 	local data = params.userParam as WaitingData
 	local cellState = engine_react_util.useStepState(function() : LineCellState
-		return lineCellState(data.rows[params.rowKey])
+		local row = data.rows[params.rowKey]
+		if row == nil then
+			return { label = "", tooltip = nil, line = nil }
+		end
+		local label = rank.shortenMiddle(row.lineName, LINE_NAME_MAX_CHARS)
+		return { label = label, tooltip = label ~= row.lineName and row.lineName or nil, line = row.line }
 	end)
 	local current = cellState:old()
 	if current.line == nil then
 		return builtin.BoxLayout{ children = {} }
 	end
-	-- The tooltip goes on the button itself; on a BoxLayout it never showed.
+	-- A tooltip must go on the button itself; on a BoxLayout it never shows.
 	return builtin.BoxLayout{
 		children = {
 			line_react_util.makeEntityWindowButton(current.label, current.line, nil, nil, nil, nil, current.tooltip),
@@ -687,7 +694,7 @@ end)
 -- Starts sorted by Waiting (column 3), largest first.
 local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeNodeId
 	-- Rows are refilled on every update; a key the table still holds from before sorts as an empty row.
-	local EMPTY_ROW : WaitingRow = { name = "", waiting = 0, lines = {} }
+	local EMPTY_ROW : WaitingRow = { name = "", lineName = "", waiting = 0 }
 	local function rowOf(rowKey : integer) : WaitingRow
 		return data.rows[rowKey] or EMPTY_ROW
 	end
@@ -722,9 +729,9 @@ local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeN
 				name = _("Line"),
 				recipe = WaitingLineCell,
 				getCompareValue = function(rowKey : integer) : any
-					return rank.formatLineLabel(rowOf(rowKey))
+					return rowOf(rowKey).lineName
 				end,
-				-- Without a weight the column takes its widest content; long line names ("Bus Passengers-CouClu-LO-1 +1")
+				-- Without a weight the column takes its widest content; long line names ("Bus Passengers-CouClu-LO-1")
 				-- then squeezed Destination to nothing and its buttons were drawn under Distance.
 				weight = 6,
 			},
@@ -743,7 +750,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		return nil
 	end)
 	local data = react.useStateLazy(function() : WaitingData
-		return { here = params.entityId, rows = {}, selectionState = selectionState }
+		return { here = params.entityId, rows = {}, selectionState = selectionState, keys = {}, nextKey = 0 }
 	end):old()
 	local current = state:old()
 
@@ -766,7 +773,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		end
 		local rowKeys : {integer} = {}
 		for i, row in ipairs(tbl.rows) do
-			rowKeys[i] = waitingRowKey(row)
+			rowKeys[i] = waitingRowKey(data, row)
 			data.rows[rowKeys[i]] = row
 		end
 		if #rowKeys == 0 then

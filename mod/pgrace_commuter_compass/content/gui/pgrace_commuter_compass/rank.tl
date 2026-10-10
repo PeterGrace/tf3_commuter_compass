@@ -120,44 +120,44 @@ function rank.buildSections(towns : {TownData}, cap : integer, nearbyCount : int
 end
 
 local type Waiter = PgraceCommuterCompassRank.Waiter
-local type LineCount = PgraceCommuterCompassRank.LineCount
 local type WaitingRow = PgraceCommuterCompassRank.WaitingRow
 
-local function byCountThenName(a : LineCount, b : LineCount) : boolean
-	if a.count ~= b.count then
-		return a.count > b.count
-	end
-	return a.name < b.name
-end
-
-local function byWaitingThenName(a : WaitingRow, b : WaitingRow) : boolean
+local function byWaitingThenNames(a : WaitingRow, b : WaitingRow) : boolean
 	if a.waiting ~= b.waiting then
 		return a.waiting > b.waiting
 	end
-	return a.name < b.name
+	if a.name ~= b.name then
+		return a.name < b.name
+	end
+	return a.lineName < b.lineName
 end
 
--- One row out of a {line: count} bucket.
-local function waitingRow(destination : Engine.Entity, name : string, distance : number, bucket : {Engine.Entity : integer},
-		lineName : {Engine.Entity : string}) : WaitingRow
-	local row : WaitingRow = { destination = destination, name = name, distance = distance, waiting = 0, lines = {} }
+-- {destination: {line: count}} into sorted rows; `destination` is nil for the Unknown bucket.
+local function rowsOf(destination : Engine.Entity, bucket : {Engine.Entity : integer}, info : PgraceCommuterCompassRank.WaitingInfo,
+		into : {WaitingRow})
 	for line, count in pairs(bucket) do
-		row.lines[#row.lines + 1] = { line = line, name = lineName[line] or tostring(line), count = count }
-		row.waiting = row.waiting + count
+		local row : WaitingRow = {
+			destination = destination,
+			name = info.unknownName,
+			line = line,
+			lineName = info.lineName[line] or tostring(line),
+			waiting = count,
+		}
+		if destination ~= nil then
+			row.name = info.destinationName[destination] or tostring(destination)
+			row.distance = info.destinationDistance[destination]
+		end
+		into[#into + 1] = row
 	end
-	table.sort(row.lines, byCountThenName)
-	return row
 end
 
 function rank.groupWaiting(waiters : {Waiter}, info : PgraceCommuterCompassRank.WaitingInfo) : PgraceCommuterCompassRank.WaitingTable
 	local buckets : {Engine.Entity : {Engine.Entity : integer}} = {}
-	local unknown : {Engine.Entity : integer} = nil
+	local unknown : {Engine.Entity : integer} = {}
+	local total = 0
 	for _, waiter in ipairs(waiters) do
-		local bucket : {Engine.Entity : integer}
-		if waiter.destination == nil then
-			unknown = unknown or {}
-			bucket = unknown
-		else
+		local bucket = unknown
+		if waiter.destination ~= nil then
 			bucket = buckets[waiter.destination]
 			if bucket == nil then
 				bucket = {}
@@ -165,22 +165,21 @@ function rank.groupWaiting(waiters : {Waiter}, info : PgraceCommuterCompassRank.
 			end
 		end
 		bucket[waiter.line] = (bucket[waiter.line] or 0) + 1
+		total = total + 1
 	end
 
 	local rows : {WaitingRow} = {}
+	local destinationCount = 0
 	for destination, bucket in pairs(buckets) do
-		local name = info.destinationName[destination] or tostring(destination)
-		rows[#rows + 1] = waitingRow(destination, name, info.destinationDistance[destination], bucket, info.lineName)
+		destinationCount = destinationCount + 1
+		rowsOf(destination, bucket, info, rows)
 	end
-	table.sort(rows, byWaitingThenName)
-	local destinationCount = #rows
-	if unknown ~= nil then
-		rows[#rows + 1] = waitingRow(nil, info.unknownName, nil, unknown, info.lineName)
-	end
-
-	local total = 0
-	for _, row in ipairs(rows) do
-		total = total + row.waiting
+	table.sort(rows, byWaitingThenNames)
+	local unknownRows : {WaitingRow} = {}
+	rowsOf(nil, unknown, info, unknownRows)
+	table.sort(unknownRows, byWaitingThenNames)
+	for _, row in ipairs(unknownRows) do
+		rows[#rows + 1] = row
 	end
 	return { rows = rows, totalWaiting = total, destinationCount = destinationCount }
 end
@@ -204,20 +203,6 @@ function rank.shortenMiddle(text : string, maxChars : integer) : string
 	local head = table.concat(chars, "", 1, headCount):gsub("%s+$", "")
 	local tail = table.concat(chars, "", #chars - tailCount + 1, #chars):gsub("^%s+", "")
 	return head .. "…" .. tail
-end
-
-function rank.formatLineLabel(row : WaitingRow, maxChars? : integer) : string
-	if #row.lines == 0 then
-		return ""
-	end
-	local name = row.lines[1].name
-	if maxChars ~= nil then
-		name = rank.shortenMiddle(name, maxChars)
-	end
-	if #row.lines == 1 then
-		return name
-	end
-	return name .. " +" .. tostring(#row.lines - 1)
 end
 
 return rank

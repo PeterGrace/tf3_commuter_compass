@@ -19,7 +19,7 @@ rev 2.
 | What "where they go" means | The **final destination**: the town (or industry) that the person's target belongs to. |
 | Which mod | Inside **Commuter Compass**, as a second card. It reuses the table, formatting, arrow and camera code. |
 | Destinations that aren't towns | **Industries get their own rows.** Targets that can't be placed are counted as "Unknown". |
-| Several lines per destination | **The biggest line, plus "+N"** for the others. The tooltip has the full split. |
+| Several lines per destination | **One row per destination and line**, so each line name opens its own line. This changed after the first test; it was "the biggest line plus \"+N\"", where the other lines couldn't be reached. |
 | Refresh | **Live:** recounted every second while the window is open, like the base terminals view. This changed after the spike; it was "snapshot plus a Refresh button". |
 
 ## Card layout
@@ -29,10 +29,10 @@ Waiting passengers
  Waiting · 1,240 people · 9 destinations
  ┌──────────────────────────────────────────────────────────┐
  │ Destination            Distance  Waiting  Line           │
- │ ⌖ ↗ Country Club        6.1 km     612    Red Line +1    │
+ │ ⌖ ↗ Country Club        6.1 km     500    Red Line       │
  │ ⌖ ↗ Wenatchee           4.4 km     380    Red Line       │
  │ ⌖ ↗ Joplin              2.2 km     140    Bus 12         │
- │ ⌖ ↗ Coal mine           2.9 km     108    Bus 12         │
+ │ ⌖ ↗ Country Club        6.1 km     112    Bus 4          │
  └──────────────────────────────────────────────────────────┘
 ```
 
@@ -44,8 +44,10 @@ Waiting passengers
     (`makeEntityWindowButton`). The "Unknown" row has no buttons.
   - **Distance:** straight-line distance from the station, through `rank.formatDistance`. Shows "-" for Unknown.
   - **Waiting:** the number of people.
-  - **Line:** the line with the most people for this destination, plus " +N" when N other lines also carry people for
-    it. Clicking the line name opens the line window. The tooltip lists every line with its count, largest first.
+  - **Line:** the line these people are waiting for. Clicking it opens the line window. Names longer than 17
+    characters are shortened in the middle (`rank.shortenMiddle`), and the tooltip then shows the full name.
+  - A destination served by several lines has one row per line. They share one arrow, and only the toggle of the row
+    that was clicked lights up (`Selection.via`).
 - **Sorting:** starts sorted by Waiting, descending. Headers re-sort.
 - **Header:** "Waiting · N people · M destinations". The card recounts every second
   (`engine_react_util.useStepStateTimer`) and re-renders only when the result changes.
@@ -96,12 +98,11 @@ Waiting passengers
 
 `groupWaiting(waiters, info) : WaitingTable`. `info` maps a destination to `{name, distance}`, and a line to its name.
 
-- **Rows:** one per destination, plus one "Unknown" row if needed. Each row is
-  `{destination, name, distance, waiting, topLine, topLineCount, otherLineCount, lines : {{line, name, count}}}`.
-- **Lines inside a row:** sorted by count, descending, with ties broken by name. `topLine` is the first of them.
-- **Row order:** by waiting count, descending, then by name. The Unknown row always comes last.
-- **Totals:** `totalWaiting` and `destinationCount`. The Unknown row doesn't count as a destination.
-- **`formatLineLabel(row)`** gives "Red Line" or "Red Line +1".
+- **Rows:** one per destination and line, plus one "Unknown" row per line if needed. Each row is
+  `{destination, name, distance, line, lineName, waiting}`.
+- **Row order:** by waiting count, descending, then destination name, then line name. Unknown rows come last.
+- **Totals:** `totalWaiting`, and `destinationCount` (distinct destinations, without Unknown).
+- **`shortenMiddle(text, maxChars)`** shortens long names, keeping the start and a longer end (UTF-8 aware).
 
 ### UI script
 
@@ -153,19 +154,20 @@ Country Club Station, a busy bus hub with 9 player line stops and 246–313 peop
 ## Testing
 
 - **Unit tests (`tests/rank_test.lua`):**
-  - grouping per destination;
-  - the top line, with ties broken by name, and "+N";
-  - the lines in a row are sorted, and their counts add up to `waiting`;
-  - row order, with Unknown last;
+  - grouping per destination and line;
+  - row order (waiting, then destination name, then line name), with Unknown last;
+  - `shortenMiddle`, by characters, not bytes;
   - the totals;
   - an empty input.
 - **In-game checklist:**
   - [ ] A passenger station shows the **Waiting passengers** card, expanded. A cargo-only station doesn't.
   - [ ] The total roughly matches the base window's waiting counts (it lags by up to a second).
   - [ ] Destination names open their windows, line names open the line, and Locate moves the camera.
-  - [ ] The line tooltip lists every line, and its counts add up to the row's Waiting.
-  - [ ] The numbers update by themselves about once a second, without flicker. The line tooltip stays open while
-    hovering, and the arrow stays.
+  - [ ] A destination with several lines has a row per line, and each line name opens its own line.
+  - [ ] A shortened line name shows its full name as a tooltip.
+  - [ ] The numbers update by themselves about once a second, without flicker. Tooltips stay open while hovering, and
+    the arrow stays.
+  - [ ] Turning on the arrow in one of a destination's rows lights only that row's toggle.
   - [ ] Arrows go from the station to the destination, switch on the first click, and stay clear of the window.
   - [ ] The town card still works as before.
 

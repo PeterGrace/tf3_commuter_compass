@@ -58,28 +58,24 @@ global record PgraceCommuterCompassRank
 		destination : Engine.Entity
 	end
 
-	record LineCount
-		line : Engine.Entity
-		name : string
-		count : integer
-	end
-
+	-- The people waiting for one line towards one destination.
 	record WaitingRow
-		-- nil for the "Unknown" row.
+		-- nil for the "Unknown" rows.
 		destination : Engine.Entity
 		name : string
 		-- Metres from the station; nil when unknown.
 		distance : number
+		line : Engine.Entity
+		lineName : string
 		waiting : integer
-		-- Every line with people for this destination, by count (largest first), ties by name.
-		lines : {LineCount}
 	end
 
 	record WaitingTable
-		-- By waiting (largest first), ties by name; the Unknown row, if any, last.
+		-- One per destination and line: by waiting (largest first), then destination name, then line name;
+		-- the Unknown rows last, in the same order.
 		rows : {WaitingRow}
 		totalWaiting : integer
-		-- Rows except Unknown.
+		-- Distinct destinations, without Unknown.
 		destinationCount : integer
 	end
 
@@ -103,11 +99,8 @@ global record PgraceCommuterCompassRank
 	formatDistance : function(metres : number) : string
 	-- "45%"; "<1%" for small non-zero shares (so a rider is never shown as "0%"); "-" for nil (as the base table).
 	formatPercent : function(fraction : number) : string
-	-- Groups waiters per destination; see WaitingTable for the order.
+	-- Groups waiters per destination and line; see WaitingTable for the order.
 	groupWaiting : function(waiters : {Waiter}, info : WaitingInfo) : WaitingTable
-	-- "Red Line", or "Red Line +2" when two other lines carry people too; "" without lines.
-	-- With `maxChars`, the top line's name is shortened by shortenMiddle.
-	formatLineLabel : function(row : WaitingRow, maxChars? : integer) : string
 	-- At most `maxChars` characters (UTF-8 aware): the start, "…", and a longer end, since names like
 	-- "Bus Passengers-CouClu-LO-1" differ at the end. Spaces next to the "…" are dropped.
 	shortenMiddle : function(text : string, maxChars : integer) : string
