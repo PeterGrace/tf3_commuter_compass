@@ -8,7 +8,8 @@ sorted by distance, and every section starts collapsed.
 
 Each row has the game's Locate button, a clickable name that opens the town's window, and an arrow toggle. The
 toggle shows one passenger-flow arrow on the map and frames both towns. The arrow is animated when line usage is
-above 0, and faint otherwise.
+above 0, and faint otherwise. Its distance is shown on the map, at the top of the arc (on a full-screen layer of the
+arrow's own map action, so popups can't displace it).
 
 The counts come from `api.engine.util.town.getSourceToDestinationCount`, the same source as the base game's
 Destinations table on the Supplies tab. They are a snapshot of residents' destinations (trips), not trips per year
@@ -40,7 +41,8 @@ mod/pgrace_commuter_compass/          # the mod folder TF3 loads
 └── content/gui/pgrace_commuter_compass/
     ├── town_plugin.res.lua           # registers the card in the town window
     ├── station_plugin.res.lua        # registers the Waiting passengers card in the station window
-    ├── pgrace_commuter_compass.script.tl  # UI: sections, tables, the map arrow
+    ├── pgrace_commuter_compass.script.tl  # UI: sections, tables, the map arrow and its distance label
+    ├── arrow_label.css.lua           # lets the distance label's layer fill the screen
     ├── commuters.tl                  # reads game state: towns, positions, commuter counts
     ├── waiting.tl                    # reads game state: people waiting at a station and where they're going
     └── rank.tl                       # pure: sections, sorting, formatting (unit-tested)
@@ -74,6 +76,8 @@ Restart TF3 after code changes. The log is
 - [ ] Switching from one arrow to another (across sections too) moves the arrow on the first click.
 - [ ] Toggling an arrow off, or closing the window, restores the town's normal overlay.
 - [ ] Folding a section while an arrow shows keeps the arrow, without a camera jump.
+- [ ] The arrow shows its distance at the top of its arc. The label follows the arc through pan, tilt and zoom,
+  survives popups such as a town's celebration, changes with the arrow, and goes away when the arrow does.
 
 Station card:
 
