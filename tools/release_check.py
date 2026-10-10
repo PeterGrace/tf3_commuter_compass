@@ -99,6 +99,31 @@ unknown = [t for t in info.get("tags") or [] if t not in KNOWN_TAGS]
 if not info.get("tags") or unknown:
     errors.append(f"modinfo tags must be non-empty and from the supported list (unknown: {unknown})")
 
+for lang, loc in (info.get("localization") or {}).items():
+    for key, limit in (("name", 32), ("summary", 100)):
+        value = loc.get(key) or ""
+        if value and (len(value) > limit or "\n" in value):
+            errors.append(f"modinfo localization {lang} {key} must be 1-{limit} chars without line breaks (is {len(value)})")
+
+# Translations: every _("...") key in the scripts needs an entry for each language in strings.json.
+strings_path = MOD / "strings.json"
+if strings_path.exists():
+    translations = json.loads(strings_path.read_text(encoding="utf-8"))
+    used = set()
+    for tl in (MOD / "content").rglob("*.tl"):
+        if not tl.name.endswith(".d.tl"):
+            used |= {m.encode().decode("unicode_escape") for m in re.findall(r'_\("((?:[^"\\]|\\.)*)"\)', tl.read_text(encoding="utf-8"))}
+    for lang, table in sorted(translations.items()):
+        if not isinstance(table, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()):
+            errors.append(f"strings.json {lang}: must map text to text")
+            continue
+        missing = sorted(used - table.keys())
+        if missing:
+            errors.append(f"strings.json {lang}: {len(missing)} untranslated: {missing}")
+        unused = sorted(table.keys() - used)
+        if unused:
+            warnings.append(f"strings.json {lang}: {len(unused)} no longer used: {unused}")
+
 meta = MOD / "_metadata"
 images = sorted(p for p in meta.iterdir() if re.fullmatch(r"\d+\.(png|jpg)", p.name))
 if not any(p.stem == "0" for p in images):

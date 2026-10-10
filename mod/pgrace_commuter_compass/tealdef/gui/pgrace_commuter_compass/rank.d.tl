@@ -68,6 +68,9 @@ global record PgraceCommuterCompassRank
 		line : Engine.Entity
 		lineName : string
 		waiting : integer
+		-- Set by the UI: the distance and count in the player's language and units.
+		distanceText : string
+		waitingText : string
 	end
 
 	record WaitingTable

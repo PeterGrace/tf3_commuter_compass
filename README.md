@@ -91,6 +91,29 @@ Station card:
 - [ ] Turning on the arrow in one of a destination's rows lights only that row's toggle.
 - [ ] Arrows go from the station to the destination, and stay clear of the window.
 
+Translations (switch the game to German):
+
+- [ ] Both cards, their headers, columns, hints and tooltips are in German.
+- [ ] Distances use a decimal comma ("2,2 km") and counts a thousands dot ("1.240"), in the tables and on the arrow.
+
+## Translations
+
+Text shown in the game is wrapped in `_("...")`; the English text is the key. Translations live in
+`mod/pgrace_commuter_compass/strings.json`, one block per language code (`"de"` so far):
+
+```json
+{ "de": { "Waiting passengers": "Wartende Passagiere" } }
+```
+
+A key missing for a language shows in English. `just release-check` fails if any `_()` key lacks an entry for a
+language in the file, and warns about entries no longer used. Distances and counts use the game's formatters
+(`api.util.formatLength`, `api.util.lang.formatInt`), so they follow the player's language and units. The Mod Hub
+name, summary and description are translated under `localization` in `_metadata/modinfo.json`; `description.html`
+stays English (mod.io shows only English for now).
+
+To add a language: copy the `"de"` block, change the code (as in `base/strings/`, e.g. `fr`, `pt_BR`), translate the
+values, and run `just verify`.
+
 ## Releasing
 
 1. Screenshots go in `mod/pgrace_commuter_compass/_metadata/`. `0.png` is the cover, and `1.png`, … are the gallery

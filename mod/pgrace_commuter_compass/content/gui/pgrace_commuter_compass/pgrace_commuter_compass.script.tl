@@ -121,6 +121,24 @@ local function makeFlowLayerConfig(from : Vec3f, to : Vec3f, animated : boolean)
 	return layerConfig
 end
 
+-- Distances and counts in the player's language and units ("2,2 km" in German, miles if chosen). The game's
+-- formatters, with our plain ones as the fallback should a call fail.
+local function formatDistance(metres : number) : string
+	local ok, text = pcall(api.util.formatLength, metres)
+	if ok and text ~= nil then
+		return text as string
+	end
+	return rank.formatDistance(metres)
+end
+
+local function formatCount(count : integer) : string
+	local ok, text = pcall(api.util.lang.formatInt, count)
+	if ok and text ~= nil then
+		return text as string
+	end
+	return tostring(count)
+end
+
 local record ArrowLabelParams is IRecipeParamWithMeta
 	text : string
 end
@@ -241,7 +259,7 @@ local FlowAction = react.RegisterRecipe("PgraceCommuterCompassFlowAction", funct
 				nil, function() : TreeNodeId
 					return builtin.FullScreenComponent{
 						recipe = ArrowLabelLayer,
-						param = { from = from, to = to, text = rank.formatDistance(distance) } as ArrowLabelLayerParams,
+						param = { from = from, to = to, text = formatDistance(distance) } as ArrowLabelLayerParams,
 					}
 				end)
 			frameCamera(from, to)
@@ -389,13 +407,13 @@ local function makeTextCell(name : string, textOf : function(Row) : string) : Re
 end
 
 local DistanceCell = makeTextCell("PgraceCommuterCompassDistanceCell", function(row : Row) : string
-	return rank.formatDistance(row.distance)
+	return formatDistance(row.distance)
 end)
 local WorkCell = makeTextCell("PgraceCommuterCompassWorkCell", function(row : Row) : string
-	return tostring(row.work)
+	return formatCount(row.work)
 end)
 local ShopCell = makeTextCell("PgraceCommuterCompassShopCell", function(row : Row) : string
-	return tostring(row.shop)
+	return formatCount(row.shop)
 end)
 local LineUsageCell = makeTextCell("PgraceCommuterCompassLineUsageCell", function(row : Row) : string
 	return rank.formatPercent(row.lineUsage)
@@ -483,7 +501,7 @@ local record SectionSpec
 end
 
 local function plural(count : integer, one : string, many : string) : string
-	return tostring(count) .. " " .. (count == 1 and one or many)
+	return formatCount(count) .. " " .. (count == 1 and one or many)
 end
 
 -- Clickable header with the game's combobox arrows (as in collapsible_checkbox_list).
@@ -808,10 +826,10 @@ local function waitingText(name : string, textOf : function(WaitingRow) : string
 end
 
 local WaitingDistanceCell = waitingText("PgraceCommuterCompassWaitingDistanceCell", function(row : WaitingRow) : string
-	return row.distance ~= nil and rank.formatDistance(row.distance) or "-"
+	return row.distanceText or "-"
 end)
 local WaitingCountCell = waitingText("PgraceCommuterCompassWaitingCountCell", function(row : WaitingRow) : string
-	return tostring(row.waiting)
+	return row.waitingText or ""
 end)
 
 -- The line's name, shortened in the middle when long; it opens the line window.
@@ -959,6 +977,9 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		end
 		for __, row in ipairs(tbl.rows) do
 			local key = waitingRowKey(data, row)
+			-- Formatted here, not in the cells: they poll on the react step, where some game APIs are restricted.
+			row.distanceText = row.distance ~= nil and formatDistance(row.distance) or nil
+			row.waitingText = formatCount(row.waiting)
 			data.rows[key] = row
 			-- A new row, or one back after being hidden, sorts by its current numbers; shown rows keep their place.
 			if data.sortRows[key] == nil or data.known[key] == nil or not wasShown[key] then

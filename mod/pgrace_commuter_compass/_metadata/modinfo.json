@@ -8,6 +8,13 @@
     "name": "Commuter Compass",
     "summary": "Town and station window cards: where commuters and waiting passengers are headed, and how far.",
     "description": "Adds a Commuters card to the town window. Outbound lists the towns where this town's residents work or shop; Inbound lists the towns whose residents work or shop here. Each sortable table shows the straight-line distance, work and shop trips, and how many of those trips use your lines. A third list shows the three nearest towns with no commuters either way. Every row can show one arrow on the map. The station window gets a Waiting passengers card: the people waiting for your lines, grouped by final destination and line, updated live. A sibling of Cargo Compass. Cosmetic: achievements stay enabled.",
+    "localization": {
+        "de": {
+            "name": "Commuter Compass",
+            "summary": "Karten im Stadt- und Haltestellenfenster: wohin Pendler und wartende Passagiere wollen und wie weit.",
+            "description": "Fügt dem Stadtfenster eine Pendler-Karte hinzu. Ausgehend zeigt die Städte, in denen die Einwohner dieser Stadt arbeiten oder einkaufen; Eingehend die Städte, deren Einwohner hier arbeiten oder einkaufen. Jede sortierbare Tabelle zeigt die Luftlinienentfernung, Arbeits- und Einkaufsfahrten und wie viele davon deine Linien nutzen. Eine dritte Liste zeigt die drei nächsten Städte ohne Pendler. Das Haltestellenfenster erhält eine Karte „Wartende Passagiere“: die Menschen, die auf deine Linien warten, nach Endziel und Linie gruppiert und live aktualisiert. Jede Zeile kann einen Pfeil auf der Karte zeigen, mit der Entfernung am Pfeil. Ein Geschwister von Cargo Compass. Kosmetisch: Errungenschaften bleiben aktiviert."
+        }
+    },
     "tags": [
         "Script Mod"
     ],
