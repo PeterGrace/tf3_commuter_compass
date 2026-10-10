@@ -553,15 +553,24 @@ local record WaitingState
 	failed : boolean
 end
 
--- The card recounts on this timer while the window is open (the base terminals view updates about as often).
--- A count takes a few ms even at a busy hub.
-local WAITING_UPDATE_SECONDS = 1.0
+-- The card recounts on this timer while the window is open. A count takes a few ms even at a busy hub.
+local WAITING_UPDATE_SECONDS = 2.0
+-- The cells check the shared rows on this timer rather than every frame: a busy station has a few hundred cells.
+local WAITING_CELL_POLL_SECONDS = 0.25
 
 -- Last error logged, so a persistent failure isn't logged on every update.
 local lastWaitingError : string = nil
 
+local probeCounts, probeSeconds = 0, 0.0 -- PROBE (remove before release)
+
 local function computeWaiting(stationGroup : Engine.Entity) : WaitingState
+	local probeStart = os.clock() -- PROBE (remove before release)
 	local ok, resultOrError = pcall(waiting.count, stationGroup)
+	probeCounts, probeSeconds = probeCounts + 1, probeSeconds + (os.clock() - probeStart) -- PROBE (remove before release)
+	if probeCounts == 10 then -- PROBE (remove before release)
+		debugPrint(LOG_PREFIX .. "probe waiting: 10 counts, avg " .. string.format("%.2f", probeSeconds * 100) .. " ms") -- PROBE (remove before release)
+		probeCounts, probeSeconds = 0, 0.0 -- PROBE (remove before release)
+	end -- PROBE (remove before release)
 	if ok then
 		lastWaitingError = nil
 		return { waitingTable = resultOrError as WaitingTable, failed = false }
@@ -572,6 +581,13 @@ local function computeWaiting(stationGroup : Engine.Entity) : WaitingState
 		debugPrint(LOG_PREFIX .. "waiting: error for station " .. tostring(stationGroup) .. ": " .. message)
 	end
 	return { waitingTable = nil, failed = true }
+end
+
+local record LineCellState
+	label : string
+	-- The full name when the label is shortened.
+	tooltip : string
+	line : Engine.Entity
 end
 
 -- One object for the card's lifetime, handed to the table as `userParam`. Cells keep their first userParam, so
@@ -590,6 +606,8 @@ local record WaitingData
 	-- The latest row for every key handed out, kept while the row is hidden. A key always means the same destination
 	-- and line, so the name cell (which doesn't poll) reads this.
 	known : {integer : WaitingRow}
+	-- The line cell's label per row key, shortened once rather than on every poll.
+	lineLabels : {integer : LineCellState}
 end
 
 local function waitingRowKey(data : WaitingData, row : WaitingRow) : integer
@@ -630,7 +648,7 @@ local WaitingNameCell = react.RegisterRecipe("PgraceCommuterCompassWaitingNameCe
 		local current = data.selectionState:old()
 		return current ~= nil and current.from == flow.from and current.to == flow.to and current.via == flow.via
 	end
-	local selectedState = engine_react_util.useStepState(selected)
+	local selectedState = engine_react_util.useStepStateTimer(selected, WAITING_CELL_POLL_SECONDS)
 	return builtin.BoxLayout{
 		orientation = builtin.type.Orientation.Horizontal,
 		children = {
@@ -656,10 +674,10 @@ end)
 local function waitingText(name : string, textOf : function(WaitingRow) : string) : Recipe<Builtin.TableCellParam>
 	return react.RegisterRecipe(name, function(params : Builtin.TableCellParam) : TreeNodeId
 		local data = params.userParam as WaitingData
-		local textState = engine_react_util.useStepState(function() : string
+		local textState = engine_react_util.useStepStateTimer(function() : string
 			local row = data.rows[params.rowKey]
 			return row ~= nil and textOf(row) or ""
-		end)
+		end, WAITING_CELL_POLL_SECONDS)
 		-- A recipe must return a layout; a bare TextView crashes the whole UI.
 		return builtin.BoxLayout{
 			children = { builtin.TextView{ meta = { class = "font-scale-body" }, text = textState:old() } },
@@ -674,24 +692,13 @@ local WaitingCountCell = waitingText("PgraceCommuterCompassWaitingCountCell", fu
 	return tostring(row.waiting)
 end)
 
-local record LineCellState
-	label : string
-	-- The full name when the label is shortened.
-	tooltip : string
-	line : Engine.Entity
-end
-
 -- The line's name, shortened in the middle when long; it opens the line window.
 local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCell", function(params : Builtin.TableCellParam) : TreeNodeId
 	local data = params.userParam as WaitingData
-	local cellState = engine_react_util.useStepState(function() : LineCellState
-		local row = data.rows[params.rowKey]
-		if row == nil then
-			return { label = "", tooltip = nil, line = nil }
-		end
-		local label = rank.shortenMiddle(row.lineName, LINE_NAME_MAX_CHARS)
-		return { label = label, tooltip = label ~= row.lineName and row.lineName or nil, line = row.line }
-	end)
+	local NO_LINE : LineCellState = { label = "", tooltip = nil, line = nil }
+	local cellState = engine_react_util.useStepStateTimer(function() : LineCellState
+		return data.lineLabels[params.rowKey] or NO_LINE
+	end, WAITING_CELL_POLL_SECONDS)
 	local current = cellState:old()
 	if current.line == nil then
 		return builtin.BoxLayout{ children = {} }
@@ -768,7 +775,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 	local data = react.useStateLazy(function() : WaitingData
 		return {
 			here = params.entityId, rows = {}, selectionState = selectionState, keys = {}, nextKey = 0, rowKeys = {},
-			known = {},
+			known = {}, lineLabels = {},
 		}
 	end):old()
 	local current = state:old()
@@ -794,6 +801,13 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 			local key = waitingRowKey(data, row)
 			data.rows[key] = row
 			data.known[key] = row
+			local label = data.lineLabels[key]
+			if label == nil or (label.tooltip or label.label) ~= row.lineName then
+				local short = rank.shortenMiddle(row.lineName, LINE_NAME_MAX_CHARS)
+				data.lineLabels[key] = {
+					label = short, tooltip = short ~= row.lineName and row.lineName or nil, line = row.line,
+				}
+			end
 		end
 		if #tbl.rows == 0 then
 			add(makeHint(_("Nobody is waiting here.")))
