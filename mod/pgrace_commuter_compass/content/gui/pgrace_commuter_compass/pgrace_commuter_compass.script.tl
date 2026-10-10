@@ -600,6 +600,46 @@ local record WaitingData
 	known : {integer : WaitingRow}
 	-- The line cell's label per row key, shortened once rather than on every poll.
 	lineLabels : {integer : LineCellState}
+	-- The rows as they were at the last sort; the table sorts on these. The table keeps the clicked row in view, so
+	-- re-sorting on live counts made the window chase that row up and down. Refreshed on a header click.
+	sortRows : {integer : WaitingRow}
+	-- After a header click: the row the new order starts with, scrolled into view once the table has re-sorted.
+	scrollToKey : integer
+	scrollSteps : integer
+	-- The current sort, to tell a header click from the table reporting its initial sort.
+	sortColumn : integer
+	sortAscending : boolean
+end
+
+-- A column's sort value, used by the table and to find the first row after a header click.
+local WAITING_SORT_VALUES : {function(WaitingRow) : any} = {
+	function(row : WaitingRow) : any return row.name end,
+	function(row : WaitingRow) : any return row.distance or math.huge end,
+	function(row : WaitingRow) : any return row.waiting end,
+	function(row : WaitingRow) : any return row.lineName end,
+}
+
+-- The first shown row when sorted by `column`.
+local function firstWaitingKey(data : WaitingData, column : integer, ascending : boolean) : integer
+	local valueOf = WAITING_SORT_VALUES[column]
+	if valueOf == nil then
+		return nil
+	end
+	local function less(a : any, b : any) : boolean
+		if type(a) == "string" then
+			return (a as string):lower() < (b as string):lower()
+		end
+		return (a as number) < (b as number)
+	end
+	local best : integer = nil
+	local bestValue : any = nil
+	for key, row in pairs(data.rows) do
+		local value = valueOf(row)
+		if best == nil or (ascending and less(value, bestValue)) or (not ascending and less(bestValue, value)) then
+			best, bestValue = key, value
+		end
+	end
+	return best
 end
 
 local function waitingRowKey(data : WaitingData, row : WaitingRow) : integer
@@ -703,20 +743,21 @@ local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCe
 	}
 end)
 
--- Starts sorted by Waiting (column 3), largest first.
-local function makeWaitingTable(data : WaitingData) : TreeNodeId
+-- Sorts on the rows saved at the last sort (`data.sortRows`), so live counts don't reorder it.
+local function makeWaitingTable(data : WaitingData, tableRef : ReactRefWrapApiT<Builtin.DataTableParam, Builtin.DataTableApi>,
+	onSort : function(integer, boolean)) : TreeNodeId
 	-- Rows are refilled on every update; a key the table still holds from before sorts as an empty row.
 	local EMPTY_ROW : WaitingRow = { name = "", lineName = "", waiting = 0 }
 	local function rowOf(rowKey : integer) : WaitingRow
-		return data.rows[rowKey] or EMPTY_ROW
+		return data.sortRows[rowKey] or EMPTY_ROW
 	end
-	return builtin.DataTable{
+	return builtin.DataTable(react.ref(tableRef), {
 		columns = {
 			builtin.ColumnDesc{
 				name = _("Destination"),
 				recipe = WaitingNameCell,
 				getCompareValue = function(rowKey : integer) : any
-					return rowOf(rowKey).name
+					return WAITING_SORT_VALUES[1](rowOf(rowKey))
 				end,
 				-- Slightly more than Line: just enough for names like "South Valley" beside the two buttons.
 				weight = 7,
@@ -725,7 +766,7 @@ local function makeWaitingTable(data : WaitingData) : TreeNodeId
 				name = _("Distance"),
 				recipe = WaitingDistanceCell,
 				getCompareValue = function(rowKey : integer) : any
-					return rowOf(rowKey).distance or math.huge
+					return WAITING_SORT_VALUES[2](rowOf(rowKey))
 				end,
 			},
 			builtin.ColumnDesc{
@@ -734,14 +775,14 @@ local function makeWaitingTable(data : WaitingData) : TreeNodeId
 				path = WAITING_ICON,
 				recipe = WaitingCountCell,
 				getCompareValue = function(rowKey : integer) : any
-					return rowOf(rowKey).waiting
+					return WAITING_SORT_VALUES[3](rowOf(rowKey))
 				end,
 			},
 			builtin.ColumnDesc{
 				name = _("Line"),
 				recipe = WaitingLineCell,
 				getCompareValue = function(rowKey : integer) : any
-					return rowOf(rowKey).lineName
+					return WAITING_SORT_VALUES[4](rowOf(rowKey))
 				end,
 				-- Without a weight the column takes its widest content; long line names ("Bus Passengers-CouClu-LO-1")
 				-- then squeezed Destination to nothing and its buttons were drawn under Distance.
@@ -750,11 +791,12 @@ local function makeWaitingTable(data : WaitingData) : TreeNodeId
 		},
 		rowKeys = data.rowKeys,
 		userParam = data,
-		initialSortColumn = { 3, false },
+		initialSortColumn = { data.sortColumn, data.sortAscending },
 		fnUserFilter = function(rowKey : integer) : boolean
 			return data.rows[rowKey] ~= nil
 		end,
-	}
+		onSortColumnChange = onSort,
+	})
 end
 
 local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", function(params : ListParams) : TreeNodeId
@@ -767,10 +809,46 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 	local data = react.useStateLazy(function() : WaitingData
 		return {
 			here = params.entityId, rows = {}, selectionState = selectionState, keys = {}, nextKey = 0, rowKeys = {},
-			known = {}, lineLabels = {},
+			known = {}, lineLabels = {}, sortRows = {}, scrollToKey = nil, scrollSteps = 0,
+			-- Starts sorted by Waiting (column 3), largest first.
+			sortColumn = 3, sortAscending = false,
 		}
 	end):old()
 	local current = state:old()
+	local tableRef = react.useNodeRef(builtin.DataTable)
+	-- Bumped on a header click, so the table re-sorts on the fresh sort values right away.
+	local sortVersion = react.useStateLazy(function() : integer
+		return 0
+	end)
+
+	local function onSort(column : integer, ascending : boolean)
+		if column == data.sortColumn and ascending == data.sortAscending then
+			return
+		end
+		data.sortColumn, data.sortAscending = column, ascending
+		for key, row in pairs(data.known) do
+			data.sortRows[key] = row
+		end
+		data.scrollToKey = firstWaitingKey(data, column, ascending)
+		data.scrollSteps = 3
+		sortVersion:set(sortVersion:old() + 1)
+	end
+
+	-- The table follows its current row when it re-sorts; bring the new first row into view a few frames later.
+	react.onStep(function()
+		if data.scrollSteps <= 0 then
+			return
+		end
+		data.scrollSteps = data.scrollSteps - 1
+		if data.scrollSteps == 0 and data.scrollToKey ~= nil then
+			local node = tableRef:get()
+			local tableApi = node and node:getApi()
+			if tableApi then
+				tableApi.scrollToRowKey(data.scrollToKey, false)
+			end
+			data.scrollToKey = nil
+		end
+	end)
 
 	local children : {TreeNodeId} = {}
 	local function add(node : TreeNodeId)
@@ -786,12 +864,18 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 				.. " · " .. plural(tbl.destinationCount, _("destination"), _("destinations")),
 		})
 		-- Refill in place: cells read rows from this same object.
+		local wasShown : {integer : boolean} = {}
 		for key in pairs(data.rows) do
+			wasShown[key] = true
 			data.rows[key] = nil
 		end
 		for __, row in ipairs(tbl.rows) do
 			local key = waitingRowKey(data, row)
 			data.rows[key] = row
+			-- A new row, or one back after being hidden, sorts by its current numbers; shown rows keep their place.
+			if data.sortRows[key] == nil or data.known[key] == nil or not wasShown[key] then
+				data.sortRows[key] = row
+			end
 			data.known[key] = row
 			local label = data.lineLabels[key]
 			if label == nil or (label.tooltip or label.label) ~= row.lineName then
@@ -804,7 +888,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		if #tbl.rows == 0 then
 			add(makeHint(_("Nobody is waiting here.")))
 		else
-			add(makeWaitingTable(data))
+			add(makeWaitingTable(data, tableRef, onSort))
 		end
 	end
 	-- The arrow stays until the player turns it off, even if its destination drops out of the list for a moment.

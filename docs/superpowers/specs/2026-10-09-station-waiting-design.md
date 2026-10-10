@@ -49,6 +49,11 @@ Waiting passengers
   - A destination served by several lines has one row per line. They share one arrow, and only the toggle of the row
     that was clicked lights up (`Selection.via`).
 - **Sorting:** starts sorted by Waiting, descending. Headers re-sort.
+  - **The order is frozen between header clicks.** The numbers update live, but rows keep their place; a new row (or
+    one back after being hidden) slots in by its numbers at that moment. A header click re-sorts on the current
+    numbers and scrolls the new first row into view (`scrollToRowKey`).
+  - Why: the table keeps its current row (the last row clicked, else the first) in view whenever it re-sorts. Re-sorting
+    on every update made the window chase that row up and down the list.
 - **Header:** "Waiting · N people · M destinations". The card recounts every 2 seconds
   (`engine_react_util.useStepStateTimer`) and re-renders only when the result changes.
   - **Stable rows:** each destination and line gets a row key once, so it keeps its row and cells across updates.
