@@ -6,8 +6,8 @@
         }
     ],
     "name": "Commuter Compass",
-    "summary": "Town window card: towns your commuters travel to and from, how far, and how many ride your lines.",
-    "description": "Adds a Commuters card to the town window. Outbound lists the towns where this town's residents work or shop; Inbound lists the towns whose residents work or shop here. Each sortable table shows the straight-line distance, work and shop trips, and how many of those trips use your lines. A third list shows the three nearest towns with no commuters either way. Every row can show one arrow on the map. A sibling of Cargo Compass. Cosmetic: achievements stay enabled.",
+    "summary": "Town and station window cards: where commuters and waiting passengers are headed, and how far.",
+    "description": "Adds a Commuters card to the town window. Outbound lists the towns where this town's residents work or shop; Inbound lists the towns whose residents work or shop here. Each sortable table shows the straight-line distance, work and shop trips, and how many of those trips use your lines. A third list shows the three nearest towns with no commuters either way. Every row can show one arrow on the map. The station window gets a Waiting passengers card: the people waiting for your lines, grouped by final destination and line, updated live. A sibling of Cargo Compass. Cosmetic: achievements stay enabled.",
     "tags": [
         "Script Mod"
     ],

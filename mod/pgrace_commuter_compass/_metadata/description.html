@@ -1,7 +1,8 @@
 <h2>Commuter Compass</h2>
-<p>Where do your towns' commuters go, how far is it, and are they riding your lines? Commuter Compass adds a <b>Commuters</b> card to every town window. It's a sibling of Cargo Compass.</p>
+<p>Where do your towns' commuters go, how far is it, and are they riding your lines? And where is the crowd at your busy station trying to get to? Commuter Compass adds cards to <b>town and station windows</b>. It's a sibling of Cargo Compass.</p>
 <hr>
 <h3>Features</h3>
+<h4>Commuters (town window)</h4>
 <ul>
 <li><b>Outbound:</b> the towns where this town's residents work or shop.</li>
 <li><b>Inbound:</b> the towns whose residents work or shop here.</li>
@@ -10,16 +11,24 @@
 <li><b>Map arrow:</b> show one arrow between the two towns, framed by the camera. It's animated when some trips already use your lines, and faint when none do.</li>
 <li>Each row has the game's Locate button, and clicking a town's name opens its window.</li>
 </ul>
+<h4>Waiting passengers (station window)</h4>
+<ul>
+<li>Everyone waiting at the station for your lines, grouped by their <b>final destination</b>: the town (or industry) their trip ends in, not just the next stop.</li>
+<li>One row per destination and line, with the distance, the number of people waiting, and the line. Click a line's name to open it.</li>
+<li>The numbers update live while the window is open. Rows keep their place so the list doesn't jump around; click a column header to re-sort.</li>
+<li>Each row's arrow button shows a flow arrow from the station to the destination.</li>
+</ul>
 <h3>How to use</h3>
 <ol>
 <li>Open any town's window.</li>
 <li>Expand Outbound, Inbound or Nearby in the Commuters card.</li>
 <li>Click a row's arrow button to show it on the map. Click it again, or close the window, to hide it.</li>
+<li>For a crowded station, open the station's window and look at the Waiting passengers card. The biggest groups come first.</li>
 </ol>
 <h3>Good to know</h3>
 <ul>
 <li>The numbers are the residents' current work and shopping destinations, the same as the game's Destinations table on the Supplies tab. They count trips, not people: someone who both works and shops in a town counts twice.</li>
 <li>Distances are straight-line, not along roads or tracks.</li>
-<li>The data is read when the window opens. Reopen the window to refresh it.</li>
+<li>The Commuters card is read when the window opens; reopen the window to refresh it. The Waiting passengers card updates every couple of seconds.</li>
 <li>This is a cosmetic mod. It doesn't change the simulation, so achievements stay available, and you can add it to or remove it from existing saves.</li>
 </ul>
