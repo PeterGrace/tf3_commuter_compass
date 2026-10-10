@@ -561,16 +561,8 @@ local WAITING_CELL_POLL_SECONDS = 0.25
 -- Last error logged, so a persistent failure isn't logged on every update.
 local lastWaitingError : string = nil
 
-local probeCounts, probeSeconds = 0, 0.0 -- PROBE (remove before release)
-
 local function computeWaiting(stationGroup : Engine.Entity) : WaitingState
-	local probeStart = os.clock() -- PROBE (remove before release)
 	local ok, resultOrError = pcall(waiting.count, stationGroup)
-	probeCounts, probeSeconds = probeCounts + 1, probeSeconds + (os.clock() - probeStart) -- PROBE (remove before release)
-	if probeCounts == 10 then -- PROBE (remove before release)
-		debugPrint(LOG_PREFIX .. "probe waiting: 10 counts, avg " .. string.format("%.2f", probeSeconds * 100) .. " ms") -- PROBE (remove before release)
-		probeCounts, probeSeconds = 0, 0.0 -- PROBE (remove before release)
-	end -- PROBE (remove before release)
 	if ok then
 		lastWaitingError = nil
 		return { waitingTable = resultOrError as WaitingTable, failed = false }

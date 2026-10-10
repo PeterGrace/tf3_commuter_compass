@@ -20,7 +20,7 @@ rev 2.
 | Which mod | Inside **Commuter Compass**, as a second card. It reuses the table, formatting, arrow and camera code. |
 | Destinations that aren't towns | **Industries get their own rows.** Targets that can't be placed are counted as "Unknown". |
 | Several lines per destination | **One row per destination and line**, so each line name opens its own line. This changed after the first test; it was "the biggest line plus \"+N\"", where the other lines couldn't be reached. |
-| Refresh | **Live:** recounted every second while the window is open, like the base terminals view. This changed after the spike; it was "snapshot plus a Refresh button". |
+| Refresh | **Live:** recounted every 2 seconds while the window is open, like the base terminals view. This changed after the spike; it was "snapshot plus a Refresh button". |
 
 ## Card layout
 
@@ -49,7 +49,7 @@ Waiting passengers
   - A destination served by several lines has one row per line. They share one arrow, and only the toggle of the row
     that was clicked lights up (`Selection.via`).
 - **Sorting:** starts sorted by Waiting, descending. Headers re-sort.
-- **Header:** "Waiting · N people · M destinations". The card recounts every second
+- **Header:** "Waiting · N people · M destinations". The card recounts every 2 seconds
   (`engine_react_util.useStepStateTimer`) and re-renders only when the result changes.
   - **Stable rows:** each destination and line gets a row key once, so it keeps its row and cells across updates.
     The table's row keys only ever grow; rows nobody waits for right now are hidden with `fnUserFilter`, as the base
@@ -143,13 +143,16 @@ Country Club Station, a busy bus hub with 9 player line stops and 246–313 peop
   person capacity, construction) stay as fallbacks. No sample hit them, and no person ended up Unknown.
 - **Counts:** the people read always equalled `getLineStopSimEntitiesCount` summed over the line stops (3/3, 313/313,
   276/276, 246/246). The waiting hall needs no separate handling.
-- **Timing:** 0.2–16 ms per count (16 ms on the first count of a session, then 1–3 ms). Live updates would be
+- **Timing:** 0.2–16 ms per count (16 ms on the first count of a session, then 1–3 ms; 3–5 ms in a later check). Live updates would be
   affordable, so after the spike the card switched from Refresh to updating every second.
 - **Layout:** an unweighted column takes its widest content. Long line names squeezed Destination to nothing, and its
   buttons were drawn under Distance. The fix:
   - Destination and Line share the spare width at 7:6;
   - Waiting has an icon header (`symbol_person_multiple.tga`);
   - line names longer than 14 characters are shortened in the middle (`rank.shortenMiddle`).
+- **CPU (2026-10-10):** with Country Club's window open, one game thread went from about 40% to 90%, but hiding the
+  table (a probe toggle) changed nothing, so the base station window is the cost. The card still recounts every 2 s
+  (not 1 s) and its cells poll on a 0.25 s timer instead of every frame.
 - **Tooltips:** a `meta.tooltip` on a `BoxLayout` never shows. Pass it to `makeEntityWindowButton` (7th argument).
 
 ## Testing
