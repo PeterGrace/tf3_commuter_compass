@@ -139,6 +139,16 @@ local function formatCount(count : integer) : string
 	return tostring(count)
 end
 
+-- "45%", or as the player's language writes it (German: "45 %").
+local function formatPercent(fraction : number) : string
+	local text = rank.formatPercent(fraction)
+	if text:sub(-1) ~= "%" then
+		return text
+	end
+	local number = text:sub(1, -2)
+	return (_("{percent}%"):gsub("{percent}", function() : string return number end))
+end
+
 local record ArrowLabelParams is IRecipeParamWithMeta
 	text : string
 end
@@ -416,7 +426,7 @@ local ShopCell = makeTextCell("PgraceCommuterCompassShopCell", function(row : Ro
 	return formatCount(row.shop)
 end)
 local LineUsageCell = makeTextCell("PgraceCommuterCompassLineUsageCell", function(row : Row) : string
-	return rank.formatPercent(row.lineUsage)
+	return formatPercent(row.lineUsage)
 end)
 
 -- The base game's table: icons once in the header, aligned columns, sortable by clicking a header.

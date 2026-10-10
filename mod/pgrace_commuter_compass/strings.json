@@ -30,6 +30,7 @@
         "Destination": "Ziel",
         "Line": "Linie",
         "Nobody is waiting here.": "Hier wartet niemand.",
-        "Unknown": "Unbekannt"
+        "Unknown": "Unbekannt",
+        "{percent}%": "{percent} %"
     }
 }
