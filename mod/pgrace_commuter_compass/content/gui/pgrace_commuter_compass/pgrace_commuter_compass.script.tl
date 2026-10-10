@@ -32,6 +32,7 @@ local SHOP_ICON = "::/gui/entity_window/icons/symbol_shopping_cart.tga"
 local LINE_ICON = "::/gui/entity_window/icons/symbol_configure_line.tga"
 local ARROW_ICON = "::/gui/entity_window/icons/symbol_arrow_up.tga"
 local REFRESH_ICON = "::/gui/entity_window/icons/symbol_arrows_refresh.tga"
+local WAITING_ICON = "::/gui/entity_window/icons/symbol_person_multiple.tga"
 -- Line names in the Waiting table are shortened in the middle to this many characters (the tooltip has them whole).
 local LINE_NAME_MAX_CHARS = 14
 
@@ -637,9 +638,12 @@ local WaitingLineCell = react.RegisterRecipe("PgraceCommuterCompassWaitingLineCe
 	for _, line in ipairs(row.lines) do
 		tooltip[#tooltip + 1] = line.name .. ": " .. tostring(line.count)
 	end
+	-- The tooltip goes on the button itself; on a BoxLayout it never showed.
 	return builtin.BoxLayout{
-		meta = { tooltip = table.concat(tooltip, "\n") },
-		children = { line_react_util.makeEntityWindowButton(rank.formatLineLabel(row, LINE_NAME_MAX_CHARS), row.lines[1].line) },
+		children = {
+			line_react_util.makeEntityWindowButton(rank.formatLineLabel(row, LINE_NAME_MAX_CHARS), row.lines[1].line,
+				nil, nil, nil, nil, table.concat(tooltip, "\n")),
+		},
 	}
 end)
 
@@ -656,8 +660,8 @@ local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeN
 				getCompareValue = function(rowKey : integer) : any
 					return rowOf(rowKey).name
 				end,
-				-- Two thirds of the spare width: town names are what the card is read for.
-				weight = 2,
+				-- Slightly more than Line: just enough for names like "South Valley" beside the two buttons.
+				weight = 7,
 			},
 			builtin.ColumnDesc{
 				name = _("Distance"),
@@ -667,7 +671,9 @@ local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeN
 				end,
 			},
 			builtin.ColumnDesc{
-				name = _("Waiting"),
+				-- An icon header (as the base Destinations table) keeps the column as narrow as its numbers.
+				tooltip = _("Waiting"),
+				path = WAITING_ICON,
 				recipe = WaitingCountCell,
 				getCompareValue = function(rowKey : integer) : any
 					return rowOf(rowKey).waiting
@@ -681,7 +687,7 @@ local function makeWaitingTable(rowKeys : {integer}, data : WaitingData) : TreeN
 				end,
 				-- Without a weight the column takes its widest content; long line names ("Bus Passengers-CouClu-LO-1 +1")
 				-- then squeezed Destination to nothing and its buttons were drawn under Distance.
-				weight = 1,
+				weight = 6,
 			},
 		},
 		rowKeys = rowKeys,
