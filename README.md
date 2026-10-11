@@ -18,7 +18,8 @@ and not people.
 It also adds a **Waiting passengers** card to the station window: the people waiting at the station for the player's
 lines, grouped by their final destination (the town, or industry, that their trip ends in). There's one row per
 destination and line, with the straight-line distance, the number of people and the line (which opens the line's
-window). The card recounts every 2 seconds while the window is open. The numbers update in place, and the order only
+window). The card starts collapsed, showing only the totals ("142 people · 12 destinations"), because the base
+window puts plugin cards above the Terminals list; clicking the totals opens the table. The card recounts every 2 seconds while the window is open. The numbers update in place, and the order only
 changes when you click a header, so the window doesn't jump around. Each row's arrow toggle shows a flow arrow from
 the station to the destination.
 
@@ -82,12 +83,14 @@ Restart TF3 after code changes. The log is
 Station card:
 
 - [ ] A passenger station shows the **Waiting passengers** card. A cargo-only station doesn't.
+- [ ] The card opens collapsed, showing only the totals, with Terminals right below; clicking the totals expands it.
+- [ ] Collapsing the card hides any arrow it showed.
 - [ ] The total roughly matches the base window's waiting counts (it lags by up to 2 seconds).
 - [ ] A destination with several lines has a row per line, and each line name opens its own line.
 - [ ] A shortened line name shows its full name as a tooltip.
 - [ ] The numbers update by themselves. Rows keep their place, and the window doesn't move, even with an arrow on.
 - [ ] Rows that empty out disappear, and new destinations appear.
-- [ ] Clicking a header re-sorts the table and scrolls the window back to the card's header line.
+- [ ] Clicking a header re-sorts the table and scrolls the window back to the card's totals line.
 - [ ] Turning on the arrow in one of a destination's rows lights only that row's toggle.
 - [ ] Arrows go from the station to the destination, and stay clear of the window.
 
