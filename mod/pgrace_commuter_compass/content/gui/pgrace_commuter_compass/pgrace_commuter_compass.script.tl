@@ -725,6 +725,15 @@ local record WaitingState
 	failed : boolean
 end
 
+-- The card's plugin counts once and hands the result to both the summary line and the (collapsible) table.
+local record WaitingParams
+	entityId : Engine.Entity
+	gameCtx : GameContext
+	state : WaitingState
+	-- The summary line, which the table scrolls back to after a header click.
+	summaryRef : ReactRefWrapT<Builtin.TextViewParam>
+end
+
 -- The card recounts on this timer while the window is open. A count takes a few ms even at a busy hub.
 local WAITING_UPDATE_SECONDS = 2.0
 -- The cells check the shared rows on this timer rather than every frame: a busy station has a few hundred cells.
@@ -946,10 +955,28 @@ local function makeWaitingTable(data : WaitingData, onSort : function(integer, b
 	}
 end
 
-local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", function(params : ListParams) : TreeNodeId
-	local state = engine_react_util.useStepStateTimer(function() : WaitingState
-		return computeWaiting(params.entityId)
-	end, WAITING_UPDATE_SECONDS)
+-- The card's always-visible part: "142 people · 12 destinations".
+local WaitingSummary = react.RegisterRecipe("PgraceCommuterCompassWaitingSummary", function(params : WaitingParams) : TreeNodeId
+	local current = params.state
+	if current.failed then
+		return builtin.BoxLayout{ child = makeHint(_("Commuter Compass: error (see log)")) }
+	end
+	local tbl = current.waitingTable
+	return builtin.BoxLayout{
+		child = builtin.TextView(react.ref(params.summaryRef), {
+			text = countText(tbl.totalWaiting, {
+					one = _("{count} people|one"), few = _("{count} people|few"),
+					many = _("{count} people|many"), other = _("{count} people|other"),
+				})
+				.. " · " .. countText(tbl.destinationCount, {
+					one = _("{count} destinations|one"), few = _("{count} destinations|few"),
+					many = _("{count} destinations|many"), other = _("{count} destinations|other"),
+				}),
+		}),
+	}
+end)
+
+local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", function(params : WaitingParams) : TreeNodeId
 	local selectionState = react.useStateLazy(function() : Selection
 		return nil
 	end)
@@ -961,8 +988,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 			sortColumn = 3, sortAscending = false,
 		}
 	end):old()
-	local current = state:old()
-	local headerRef = react.useNodeRef(builtin.TextView)
+	local current = params.state
 	-- Bumped on a header click, so the table re-sorts on the fresh sort values right away.
 	local sortVersion = react.useStateLazy(function() : integer
 		return 0
@@ -981,7 +1007,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 	end
 
 	-- The table keeps its current row in view when it re-sorts, which scrolls the window to mid-list. A few frames
-	-- later, scroll the window back up to the header line. (The table's own scrollToRowKey only scrolls inside the
+	-- later, scroll the window back up to the card's summary line. (The table's own scrollToRowKey only scrolls inside the
 	-- table, not the window.)
 	react.onStep(function()
 		if data.scrollSteps <= 0 then
@@ -989,7 +1015,7 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		end
 		data.scrollSteps = data.scrollSteps - 1
 		if data.scrollSteps == 0 then
-			local node = headerRef:get()
+			local node = params.summaryRef:get()
 			if node ~= nil then
 				node:ensureVisible()
 			end
@@ -1001,20 +1027,9 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 		children[#children + 1] = node
 	end
 
-	if current.failed then
-		add(makeHint(_("Commuter Compass: error (see log)")))
-	else
+	-- The summary line above reports a failure.
+	if not current.failed then
 		local tbl = current.waitingTable
-		add(builtin.TextView(react.ref(headerRef), {
-			text = _("Waiting") .. " · " .. countText(tbl.totalWaiting, {
-					one = _("{count} people|one"), few = _("{count} people|few"),
-					many = _("{count} people|many"), other = _("{count} people|other"),
-				})
-				.. " · " .. countText(tbl.destinationCount, {
-					one = _("{count} destinations|one"), few = _("{count} destinations|few"),
-					many = _("{count} destinations|many"), other = _("{count} destinations|other"),
-				}),
-		}))
 		-- Refill in place: cells read rows from this same object.
 		local wasShown : {integer : boolean} = {}
 		for key in pairs(data.rows) do
@@ -1053,12 +1068,26 @@ local WaitingList = react.RegisterRecipe("PgraceCommuterCompassWaitingList", fun
 	return builtin.BoxLayout{ orientation = builtin.type.Orientation.Vertical, children = children }
 end)
 
+-- Collapsed when the window opens (the window keeps the expanded state), so it doesn't push the Terminals list,
+-- which always comes after the plugin cards, far down. The summary line stays visible.
 local StationPlugin = react.RegisterPluginRecipe(station_group_eow.StationGroupEowExtensionPoint, "PgraceCommuterCompassStationPlugin", function(params : StationGroupEow.StationGroupWidgetPluginParams) : TreeNodeId
+	local state = engine_react_util.useStepStateTimer(function() : WaitingState
+		return computeWaiting(params.entityId)
+	end, WAITING_UPDATE_SECONDS)
+	local summaryRef = react.useNodeRef(builtin.TextView)
+	local cardKey = tostring(react.getCurrentRecipeId())
+	local waitingParams : WaitingParams = {
+		entityId = params.entityId, gameCtx = params.gameCtx, state = state:old(), summaryRef = summaryRef,
+	}
 	return builtin.BoxLayout{
 		child = content_card.ContentCard{
 			title = _("Waiting passengers"),
 			initialCalloutTextPermanent = "",
-			recipeAndParamPermanent = content_card.makeRecipeAndParam(WaitingList, { entityId = params.entityId, gameCtx = params.gameCtx } as ListParams),
+			recipeAndParamPermanent = content_card.makeRecipeAndParam(WaitingSummary, waitingParams),
+			initialCalloutTextCollapsible = "",
+			recipeAndParamCollapsible = content_card.makeRecipeAndParam(WaitingList, waitingParams),
+			setCollapsibleExpanded = function(v : boolean) params.setCollapsibleExpanded(cardKey, v) end,
+			collapsibleExpanded = params.getCollapsibleExpanded(cardKey),
 			gameCtx = params.gameCtx,
 			showOnRightSide = params.showCalloutOnRightSide,
 		},
